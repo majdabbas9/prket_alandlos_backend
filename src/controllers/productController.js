@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const dataFilePath = path.join(__dirname, '../data/products.json');
 const uploadsDir = path.join(__dirname, '../../uploads');
+const productsDir = path.join(__dirname, '../../uploads/products');
 
 // Helper function to read products from JSON file
 const readProductsFromFile = () => {
@@ -124,7 +125,15 @@ exports.addProduct = (req, res) => {
   // If a file was uploaded via multer
   console.log(`getting a file ${req.file}`);
   if (req.file) {
-    imageUrl = `/uploads/${req.file.filename}`;
+    const originalFilePath = req.file.path;
+    const filename = req.file.filename;
+    const destPath = path.join(productsDir, filename);
+
+    if (!fs.existsSync(productsDir)) {
+      fs.mkdirSync(productsDir, { recursive: true });
+    }
+    fs.renameSync(originalFilePath, destPath);
+    imageUrl = `/uploads/products/${filename}`;
   }
 
   if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.trim()) {
@@ -187,7 +196,28 @@ exports.updateProduct = (req, res) => {
   let imageUrl = req.body.imageUrl;
 
   if (req.file) {
-    imageUrl = `/uploads/${req.file.filename}`;
+    const originalFilePath = req.file.path;
+    const filename = req.file.filename;
+    const destPath = path.join(productsDir, filename);
+
+    if (!fs.existsSync(productsDir)) {
+      fs.mkdirSync(productsDir, { recursive: true });
+    }
+    fs.renameSync(originalFilePath, destPath);
+    imageUrl = `/uploads/products/${filename}`;
+
+    // Clean up previous product image file if stored locally in /uploads/
+    if (existing.imageUrl && existing.imageUrl.startsWith('/uploads/')) {
+      const prevRelativePath = existing.imageUrl.replace(/^\/uploads\//, '');
+      const prevFilePath = path.join(uploadsDir, prevRelativePath);
+      if (fs.existsSync(prevFilePath) && prevFilePath !== destPath) {
+        try {
+          fs.unlinkSync(prevFilePath);
+        } catch (delErr) {
+          console.error('Error deleting previous product image file:', delErr);
+        }
+      }
+    }
   }
 
   const updatedProduct = {
@@ -227,8 +257,8 @@ exports.deleteProduct = (req, res) => {
 
   // If local file, attempt to delete from disk
   if (deletedProduct.imageUrl && deletedProduct.imageUrl.startsWith('/uploads/')) {
-    const filename = path.basename(deletedProduct.imageUrl);
-    const filePath = path.join(uploadsDir, filename);
+    const relativePath = deletedProduct.imageUrl.replace(/^\/uploads\//, '');
+    const filePath = path.join(uploadsDir, relativePath);
     if (fs.existsSync(filePath)) {
       try {
         fs.unlinkSync(filePath);
@@ -261,8 +291,8 @@ exports.getPhotoByUrl = async (req, res) => {
 
   // Handle local uploaded files
   if (targetUrl.startsWith('/uploads/')) {
-    const filename = path.basename(targetUrl);
-    const localFilePath = path.join(uploadsDir, filename);
+    const relativePath = targetUrl.replace(/^\/uploads\//, '');
+    const localFilePath = path.join(uploadsDir, relativePath);
     if (fs.existsSync(localFilePath)) {
       return res.sendFile(localFilePath);
     } else {

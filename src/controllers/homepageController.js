@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const R2 = require('../cloudManager/R2');
 
 const dataFilePath = path.join(__dirname, '../data/homepage.json');
 const uploadsDir = path.join(__dirname, '../../uploads');
-const homePageDir = "homePageImage";
 // Helper to read homepage metadata
 const readHomepageData = () => {
   try {
@@ -57,42 +57,30 @@ exports.getHomepageImage = async (req, res) => {
       data
     });
   }
-
-  const imageUrl = data.imageUrl;
-
-  // Handle local uploaded files
-  if (imageUrl && imageUrl.startsWith('/uploads/')) {
-    console.log("handle local uploaded file");
-    const filename = path.basename(imageUrl);
-    const localFilePath = path.join(uploadsDir, homePageDir, filename);
-    if (fs.existsSync(localFilePath)) {
-      return res.sendFile(localFilePath);
-    } else {
-      return res.status(404).json({
-        success: false,
-        error: 'Homepage image file not found on server'
-      });
-    }
-  }
-
-  // Handle remote image URLs
+  const key = data.key;
+  console.log(`key =====> ${key}`);
+  // Handle R2 uploaded files
+  console.log("handle R2 uploaded file");
   try {
-    const parsedUrl = new URL(imageUrl);
-    const response = await fetch(parsedUrl.toString());
-
-    if (!response.ok) {
-      return res.redirect(302, imageUrl);
+    const response = await R2.getImage(key);
+    res.setHeader('Content-Type', response.ContentType || data.mimeType || 'image/jpeg');
+    if (response.ContentLength) {
+      res.setHeader('Content-Length', response.ContentLength);
     }
-
-    const contentType = response.headers.get('content-type') || data.mimeType || 'image/jpeg';
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.status(200).send(buffer);
+
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    console.log("the image has been sent");
+    return res.status(200).send(Buffer.concat(chunks));
   } catch (error) {
-    console.error('Error fetching/serving homepage image file:', error.message);
-    return res.redirect(302, imageUrl);
+    console.error('Error fetching/serving homepage image from R2:', error.message);
+    return res.status(404).json({
+      success: false,
+      error: 'Homepage image file not found on R2'
+    });
   }
 };
 
@@ -110,7 +98,6 @@ exports.updateHomepageImage = async (req, res) => {
       const originalFilePath = req.file.path;
       const fileExt = path.extname(req.file.originalname).toLowerCase() || '.jpg';
       const outputFilename = `homepage-${Date.now()}${fileExt}`;
-      const outputFilePath = path.join(uploadsDir, outputFilename);
 
       // Read image metadata using sharp
       const image = sharp(originalFilePath);
@@ -131,20 +118,23 @@ exports.updateHomepageImage = async (req, res) => {
         });
       }
 
-      // Process image and save to destination path
-      await sharpPipeline.toFile(outputFilePath);
+      // Process image and output to buffer
+      const buffer = await sharpPipeline.toBuffer();
 
       // Get metadata of the output processed image
-      const processedMeta = await sharp(outputFilePath).metadata();
-      const fileStats = fs.statSync(outputFilePath);
+      const processedMeta = await sharp(buffer).metadata();
 
       width = processedMeta.width || TARGET_WIDTH;
       height = processedMeta.height || Math.round((origHeight / origWidth) * TARGET_WIDTH);
       mimeType = `image/${processedMeta.format || 'jpeg'}`;
-      size = fileStats.size;
+      size = buffer.length;
 
-      // Clean up original uploaded temporary file if different from outputFilePath
-      if (originalFilePath !== outputFilePath && fs.existsSync(originalFilePath)) {
+      // Upload processed buffer to Cloudflare R2
+      const r2Key = `homePage/${outputFilename}`;
+      await R2.uploadImage(r2Key, buffer, mimeType);
+
+      // Clean up original uploaded temporary file
+      if (fs.existsSync(originalFilePath)) {
         try {
           fs.unlinkSync(originalFilePath);
         } catch (unlinkErr) {
@@ -156,7 +146,7 @@ exports.updateHomepageImage = async (req, res) => {
       if (existingData.imageUrl && existingData.imageUrl.startsWith('/uploads/')) {
         const prevFilename = path.basename(existingData.imageUrl);
         const prevFilePath = path.join(uploadsDir, prevFilename);
-        if (fs.existsSync(prevFilePath) && prevFilePath !== outputFilePath) {
+        if (fs.existsSync(prevFilePath)) {
           try {
             fs.unlinkSync(prevFilePath);
           } catch (delErr) {
@@ -165,7 +155,17 @@ exports.updateHomepageImage = async (req, res) => {
         }
       }
 
-      updatedImageUrl = `/uploads/${outputFilename}`;
+      // Clean up previous homepage image from R2
+      if (existingData.imageUrl && existingData.imageUrl.startsWith('/r2/')) {
+        const prevKey = existingData.imageUrl.replace(/^\/r2\//, '');
+        try {
+          await R2.deleteImage(prevKey);
+        } catch (delErr) {
+          console.error('Error deleting previous homepage image from R2:', delErr);
+        }
+      }
+
+      updatedImageUrl = `/r2/${r2Key}`;
     }
 
     if (!updatedImageUrl || typeof updatedImageUrl !== 'string' || !updatedImageUrl.trim()) {
@@ -176,13 +176,13 @@ exports.updateHomepageImage = async (req, res) => {
     }
 
     const cleanUrl = updatedImageUrl.trim();
-    if (!cleanUrl.startsWith('/uploads/')) {
+    if (!cleanUrl.startsWith('/uploads/') && !cleanUrl.startsWith('/r2/')) {
       try {
         new URL(cleanUrl);
       } catch (urlErr) {
         return res.status(400).json({
           success: false,
-          error: 'imageUrl must be a valid HTTP/HTTPS URL or an uploaded file path (/uploads/...)'
+          error: 'imageUrl must be a valid HTTP/HTTPS URL or an uploaded file path (/uploads/... or /r2/...)'
         });
       }
     }
