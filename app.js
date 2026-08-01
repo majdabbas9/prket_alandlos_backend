@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const productRoutes = require('./src/routes/productRoutes');
 const homepageRoutes = require('./src/routes/homepageRoutes');
+const logoRoutes = require('./src/routes/logoRoutes');
 
 const app = express();
 
@@ -26,6 +27,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/products', productRoutes);
 app.use('/api/homepage-image', homepageRoutes);
+app.use('/api/logo', logoRoutes);
+app.use('/api/logo-image', logoRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {

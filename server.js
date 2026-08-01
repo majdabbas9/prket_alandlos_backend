@@ -14,4 +14,6 @@ app.listen(PORT, () => {
   console.log(`- GET    /api/products/photo : Proxy/serve photo by URL (?url=...)`);
   console.log(`- GET    /api/homepage-image : Fetch homepage image metadata`);
   console.log(`- POST   /api/homepage-image : Update homepage image (file upload or JSON imageUrl)`);
+  console.log(`- GET    /api/logo           : Fetch logo image file (or ?info=true for metadata)`);
+  console.log(`- POST   /api/logo           : Update logo image (file upload or JSON logoUrl)`);
 });
