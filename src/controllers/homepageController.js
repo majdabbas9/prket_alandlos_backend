@@ -3,51 +3,29 @@ const path = require('path');
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
 
-const dataFilePath = path.join(__dirname, '../data/homepage.json');
 const uploadsDir = path.join(__dirname, '../../uploads');
-// Helper to read homepage metadata
-const readHomepageData = () => {
-  try {
-    if (!fs.existsSync(dataFilePath)) {
-      return {
-        imageUrl: 'https://images.pexels.com/photos/6523303/pexels-photo-6523303.jpeg?auto=compress&cs=tinysrgb&w=1600',
-        width: 1600,
-        height: 1067,
-        mimeType: 'image/jpeg',
-        updatedAt: new Date().toISOString()
-      };
-    }
-    const content = fs.readFileSync(dataFilePath, 'utf8');
-    return JSON.parse(content || '{}');
-  } catch (error) {
-    console.error('Error reading homepage.json:', error);
-    return {
-      imageUrl: 'https://images.pexels.com/photos/6523303/pexels-photo-6523303.jpeg?auto=compress&cs=tinysrgb&w=1600',
-      width: 1600,
-      height: 1067,
-      mimeType: 'image/jpeg',
-      updatedAt: new Date().toISOString()
-    };
-  }
-};
 
-// Helper to save homepage metadata
-const saveHomepageData = (data) => {
-  try {
-    const dirPath = path.dirname(dataFilePath);
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-    fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Error writing homepage.json:', error);
-  }
+// Local variable to store the current homepage image data in memory
+let homepageData = (process.env.NODE_ENV === 'test') ? {
+  imageUrl: 'https://images.pexels.com/photos/6523303/pexels-photo-6523303.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  width: 1600,
+  height: 1067,
+  mimeType: 'image/jpeg',
+  updatedAt: new Date().toISOString()
+} : {
+  imageUrl: '/r2/homePage/homepage-1785615850216.jpeg',
+  key: 'homePage/homepage-1785615850216.jpeg',
+  width: 1600,
+  height: 2133,
+  mimeType: 'image/jpeg',
+  size: 552398,
+  updatedAt: '2026-08-01T20:24:11.144Z'
 };
 
 // 1. GET Homepage Image (returns the actual image file binary, or JSON metadata if ?info=true)
 exports.getHomepageImage = async (req, res) => {
   console.log(`getHomepageImage`);
-  const data = readHomepageData();
+  const data = homepageData;
 
   // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
   if (req.query.info === 'true' || req.query.json === 'true') {
@@ -57,8 +35,15 @@ exports.getHomepageImage = async (req, res) => {
       data
     });
   }
-  const key = data.key;
+
+  const key = data.key || (data.imageUrl && data.imageUrl.startsWith('/r2/') ? data.imageUrl.replace(/^\/r2\//, '') : null);
   console.log(`key =====> ${key}`);
+
+  if (!key) {
+    console.log(`No R2 key found. Redirecting to: ${data.imageUrl}`);
+    return res.redirect(data.imageUrl);
+  }
+
   // Handle R2 uploaded files
   console.log("handle R2 uploaded file");
   try {
@@ -87,7 +72,7 @@ exports.getHomepageImage = async (req, res) => {
 // 2. POST Update Homepage Image with sharp processing (resizing width to 1600 if needed)
 exports.updateHomepageImage = async (req, res) => {
   try {
-    const existingData = readHomepageData();
+    const existingData = homepageData;
     let updatedImageUrl = req.body ? req.body.imageUrl : null;
     let width = existingData.width || 1600;
     let height = existingData.height || 1067;
@@ -189,6 +174,7 @@ exports.updateHomepageImage = async (req, res) => {
 
     const newHomepageData = {
       imageUrl: cleanUrl,
+      key: cleanUrl.startsWith('/r2/') ? cleanUrl.replace(/^\/r2\//, '') : null,
       width,
       height,
       mimeType,
@@ -196,7 +182,7 @@ exports.updateHomepageImage = async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    saveHomepageData(newHomepageData);
+    homepageData = newHomepageData;
 
     return res.status(200).json({
       success: true,
