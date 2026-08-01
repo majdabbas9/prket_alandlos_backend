@@ -4,7 +4,7 @@ const sharp = require('sharp');
 
 const dataFilePath = path.join(__dirname, '../data/homepage.json');
 const uploadsDir = path.join(__dirname, '../../uploads');
-
+const homePageDir = "homePageImage";
 // Helper to read homepage metadata
 const readHomepageData = () => {
   try {
@@ -61,7 +61,7 @@ exports.getHomepageImage = async (req, res) => {
   // Handle local uploaded files
   if (imageUrl && imageUrl.startsWith('/uploads/')) {
     const filename = path.basename(imageUrl);
-    const localFilePath = path.join(uploadsDir, filename);
+    const localFilePath = path.join(uploadsDir, homePageDir, filename);
     if (fs.existsSync(localFilePath)) {
       return res.sendFile(localFilePath);
     } else {
