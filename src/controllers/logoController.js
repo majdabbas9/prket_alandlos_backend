@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const logger = require('../utils/logger');
 
 const uploadsDir = path.join(__dirname, '../../uploads');
 const logoDir = path.join(__dirname, '../../uploads/logo');
@@ -53,7 +54,7 @@ const getActualLogoFilePath = () => {
 
     return sorted[0].filePath;
   } catch (error) {
-    console.error('Error scanning logo directory:', error);
+    logger.error({ err: error }, 'Error scanning logo directory');
     return null;
   }
 };
@@ -130,7 +131,7 @@ exports.updateLogo = async (req, res) => {
         height = metadata.height || null;
         mimeType = `image/${metadata.format || 'jpeg'}`;
       } catch (err) {
-        console.warn('Could not extract image metadata via sharp:', err.message);
+        logger.warn({ err }, 'Could not extract image metadata via sharp');
       }
 
       fs.renameSync(originalFilePath, outputFilePath);
@@ -172,7 +173,7 @@ exports.updateLogo = async (req, res) => {
       data: newLogoData
     });
   } catch (error) {
-    console.error('Error updating logo image:', error);
+    logger.error({ err: error }, 'Error updating logo image');
     return res.status(500).json({
       success: false,
       error: 'Failed to process and update logo image: ' + error.message

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const logger = require('../utils/logger');
 
 const dataFilePath = path.join(__dirname, '../data/products.json');
 const uploadsDir = path.join(__dirname, '../../uploads');
@@ -15,7 +16,7 @@ const readProductsFromFile = () => {
     const fileData = fs.readFileSync(dataFilePath, 'utf8');
     return JSON.parse(fileData || '[]');
   } catch (error) {
-    console.error('Error reading products file:', error);
+    logger.error({ err: error }, 'Error reading products file');
     return [];
   }
 };
@@ -29,7 +30,7 @@ const saveProductsToFile = (products) => {
     }
     fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2), 'utf8');
   } catch (error) {
-    console.error('Error writing products file:', error);
+    logger.error({ err: error }, 'Error writing products file');
   }
 };
 
@@ -123,7 +124,7 @@ exports.addProduct = (req, res) => {
   let imageUrl = req.body.imageUrl;
 
   // If a file was uploaded via multer
-  console.log(`getting a file ${req.file}`);
+  logger.info({ file: req.file }, 'getting a file');
   if (req.file) {
     const originalFilePath = req.file.path;
     const filename = req.file.filename;
@@ -214,7 +215,7 @@ exports.updateProduct = (req, res) => {
         try {
           fs.unlinkSync(prevFilePath);
         } catch (delErr) {
-          console.error('Error deleting previous product image file:', delErr);
+          logger.error({ err: delErr }, 'Error deleting previous product image file');
         }
       }
     }
@@ -263,7 +264,7 @@ exports.deleteProduct = (req, res) => {
       try {
         fs.unlinkSync(filePath);
       } catch (err) {
-        console.error(`Failed to delete file ${filePath}:`, err);
+        logger.error({ err: err, filePath }, 'Failed to delete file');
       }
     }
   }
@@ -321,7 +322,7 @@ exports.getPhotoByUrl = async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.status(200).send(buffer);
   } catch (error) {
-    console.error('Error fetching photo by URL:', error.message);
+    logger.error({ err: error }, 'Error fetching photo by URL');
     return res.redirect(302, targetUrl);
   }
 };

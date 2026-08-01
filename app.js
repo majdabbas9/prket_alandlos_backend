@@ -40,9 +40,11 @@ app.use((req, res) => {
   });
 });
 
+const logger = require('./src/utils/logger');
+
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled Server Error:', err.message);
+  logger.error('Unhandled Server Error:', err.message);
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Internal Server Error'

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
+const logger = require('../utils/logger');
 
 const uploadsDir = path.join(__dirname, '../../uploads');
 
@@ -24,12 +25,12 @@ let homepageData = (process.env.NODE_ENV === 'test') ? {
 
 // 1. GET Homepage Image (returns the actual image file binary, or JSON metadata if ?info=true)
 exports.getHomepageImage = async (req, res) => {
-  console.log(`getHomepageImage`);
+  logger.info('getHomepageImage');
   const data = homepageData;
 
   // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
   if (req.query.info === 'true' || req.query.json === 'true') {
-    console.log("the user asked for metadata");
+    logger.info('the user asked for metadata');
     return res.status(200).json({
       success: true,
       data
@@ -37,15 +38,15 @@ exports.getHomepageImage = async (req, res) => {
   }
 
   const key = data.key || (data.imageUrl && data.imageUrl.startsWith('/r2/') ? data.imageUrl.replace(/^\/r2\//, '') : null);
-  console.log(`key =====> ${key}`);
+  logger.info({ key }, 'key checking');
 
   if (!key) {
-    console.log(`No R2 key found. Redirecting to: ${data.imageUrl}`);
+    logger.info({ imageUrl: data.imageUrl }, 'No R2 key found. Redirecting');
     return res.redirect(data.imageUrl);
   }
 
   // Handle R2 uploaded files
-  console.log("handle R2 uploaded file");
+  logger.info('handle R2 uploaded file');
   try {
     const response = await R2.getImage(key);
     res.setHeader('Content-Type', response.ContentType || data.mimeType || 'image/jpeg');
@@ -58,10 +59,10 @@ exports.getHomepageImage = async (req, res) => {
     for await (const chunk of response.Body) {
       chunks.push(chunk);
     }
-    console.log("the image has been sent");
+    logger.info('the image has been sent');
     return res.status(200).send(Buffer.concat(chunks));
   } catch (error) {
-    console.error('Error fetching/serving homepage image from R2:', error.message);
+    logger.error({ err: error }, 'Error fetching/serving homepage image from R2');
     return res.status(404).json({
       success: false,
       error: 'Homepage image file not found on R2'
@@ -123,7 +124,7 @@ exports.updateHomepageImage = async (req, res) => {
         try {
           fs.unlinkSync(originalFilePath);
         } catch (unlinkErr) {
-          console.error('Error removing temp upload file:', unlinkErr);
+          logger.error({ err: unlinkErr }, 'Error removing temp upload file');
         }
       }
 
@@ -135,7 +136,7 @@ exports.updateHomepageImage = async (req, res) => {
           try {
             fs.unlinkSync(prevFilePath);
           } catch (delErr) {
-            console.error('Error deleting previous homepage image file:', delErr);
+            logger.error({ err: delErr }, 'Error deleting previous homepage image file');
           }
         }
       }
@@ -146,7 +147,7 @@ exports.updateHomepageImage = async (req, res) => {
         try {
           await R2.deleteImage(prevKey);
         } catch (delErr) {
-          console.error('Error deleting previous homepage image from R2:', delErr);
+          logger.error({ err: delErr }, 'Error deleting previous homepage image from R2');
         }
       }
 
@@ -190,7 +191,7 @@ exports.updateHomepageImage = async (req, res) => {
       data: newHomepageData
     });
   } catch (error) {
-    console.error('Error updating homepage image:', error);
+    logger.error({ err: error }, 'Error updating homepage image');
     return res.status(500).json({
       success: false,
       error: 'Failed to process and update homepage image: ' + error.message

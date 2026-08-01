@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../utils/logger');
 
 const dataFilePath = path.join(__dirname, '../data/info.json');
 
@@ -19,7 +20,7 @@ const readInfoData = () => {
     const content = fs.readFileSync(dataFilePath, 'utf8');
     return JSON.parse(content || '{}');
   } catch (error) {
-    console.error('Error reading info.json:', error);
+    logger.error({ err: error }, 'Error reading info.json');
     return {
       showPrice: true,
       storeOpeningTime: "9:00 AM - 10:00 PM",
@@ -41,7 +42,7 @@ const saveInfoData = (data) => {
     fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (error) {
-    console.error('Error writing info.json:', error);
+    logger.error({ err: error }, 'Error writing info.json');
     return false;
   }
 };
@@ -85,7 +86,7 @@ exports.updateInfo = (req, res) => {
       data: updatedData
     });
   } catch (error) {
-    console.error('Error updating info:', error);
+    logger.error({ err: error }, 'Error updating info');
     return res.status(500).json({
       success: false,
       error: 'Failed to update store information: ' + error.message
