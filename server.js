@@ -16,4 +16,6 @@ app.listen(PORT, () => {
   console.log(`- POST   /api/homepage-image : Update homepage image (file upload or JSON imageUrl)`);
   console.log(`- GET    /api/logo           : Fetch logo image file (or ?info=true for metadata)`);
   console.log(`- POST   /api/logo           : Update logo image (file upload or JSON logoUrl)`);
+  console.log(`- GET    /api/info           : Fetch store information`);
+  console.log(`- POST   /api/info           : Update store information`);
 });

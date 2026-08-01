@@ -4,6 +4,7 @@ const path = require('path');
 const productRoutes = require('./src/routes/productRoutes');
 const homepageRoutes = require('./src/routes/homepageRoutes');
 const logoRoutes = require('./src/routes/logoRoutes');
+const infoRoutes = require('./src/routes/infoRoutes');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/homepage-image', homepageRoutes);
 app.use('/api/logo', logoRoutes);
 app.use('/api/logo-image', logoRoutes);
+app.use('/api/info', infoRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {
