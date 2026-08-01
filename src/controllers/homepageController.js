@@ -46,10 +46,12 @@ const saveHomepageData = (data) => {
 
 // 1. GET Homepage Image (returns the actual image file binary, or JSON metadata if ?info=true)
 exports.getHomepageImage = async (req, res) => {
+  console.log(`getHomepageImage`);
   const data = readHomepageData();
 
   // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
   if (req.query.info === 'true' || req.query.json === 'true') {
+    console.log("the user asked for metadata");
     return res.status(200).json({
       success: true,
       data
@@ -60,6 +62,7 @@ exports.getHomepageImage = async (req, res) => {
 
   // Handle local uploaded files
   if (imageUrl && imageUrl.startsWith('/uploads/')) {
+    console.log("handle local uploaded file");
     const filename = path.basename(imageUrl);
     const localFilePath = path.join(uploadsDir, homePageDir, filename);
     if (fs.existsSync(localFilePath)) {
