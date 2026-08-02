@@ -3,6 +3,7 @@ const path = require('path');
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
 const logger = require('../utils/logger');
+const homepageCache = require('../utils/homepageCache');
 
 const uploadsDir = path.join(__dirname, '../../uploads');
 
@@ -25,7 +26,7 @@ let homepageData = (process.env.NODE_ENV === 'test') ? {
 
 // 1. GET Homepage Image (returns the actual image file binary, or JSON metadata if ?info=true)
 exports.getHomepageImage = async (req, res) => {
-  logger.info('getHomepageImage');
+  logger.info('get Homepage Image');
   const data = homepageData;
 
   // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
@@ -45,22 +46,36 @@ exports.getHomepageImage = async (req, res) => {
     return res.redirect(data.imageUrl);
   }
 
-  // Handle R2 uploaded files
-  logger.info('handle R2 uploaded file');
+  // Check cache first
+  const cached = homepageCache.get();
+  if (cached) {
+    logger.info('Serving homepage image from cache');
+    res.setHeader('Content-Type', cached.contentType);
+    res.setHeader('Content-Length', cached.buffer.length);
+    return res.status(200).send(cached.buffer);
+  }
+  // Handle R2 file
+  logger.info('handle R2 file');
+
   try {
     const response = await R2.getImage(key);
-    res.setHeader('Content-Type', response.ContentType || data.mimeType || 'image/jpeg');
+    const contentType = response.ContentType || data.mimeType || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
     if (response.ContentLength) {
       res.setHeader('Content-Length', response.ContentLength);
     }
-    res.setHeader('Cache-Control', 'public, max-age=86400');
 
     const chunks = [];
     for await (const chunk of response.Body) {
       chunks.push(chunk);
     }
-    logger.info('the image has been sent');
-    return res.status(200).send(Buffer.concat(chunks));
+    const buffer = Buffer.concat(chunks);
+
+    // Save to cache
+    homepageCache.set(buffer, contentType);
+
+    logger.info('the image has been sent and cached');
+    return res.status(200).send(buffer);
   } catch (error) {
     logger.error({ err: error }, 'Error fetching/serving homepage image from R2');
     return res.status(404).json({
@@ -119,6 +134,9 @@ exports.updateHomepageImage = async (req, res) => {
       const r2Key = `homePage/${outputFilename}`;
       await R2.uploadImage(r2Key, buffer, mimeType);
 
+      // Update cache
+      homepageCache.set(buffer, mimeType);
+
       // Clean up original uploaded temporary file
       if (fs.existsSync(originalFilePath)) {
         try {
@@ -152,6 +170,9 @@ exports.updateHomepageImage = async (req, res) => {
       }
 
       updatedImageUrl = `/r2/${r2Key}`;
+    } else {
+      // If it's a URL/string update, clear the cache
+      homepageCache.clear();
     }
 
     if (!updatedImageUrl || typeof updatedImageUrl !== 'string' || !updatedImageUrl.trim()) {
