@@ -54,6 +54,17 @@ describe('Homepage Image API Endpoints', () => {
     })
       .png()
       .toFile(testImagePath);
+
+    // Populate mockStorage with an initial dummy image for GET request
+    const dummyImageBuffer = await sharp({
+      create: {
+        width: 1600,
+        height: 1067,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 1 }
+      }
+    }).png().toBuffer();
+    mockStorage.set('homePage/homepageImage', dummyImageBuffer);
   });
 
   afterAll(() => {
@@ -65,6 +76,7 @@ describe('Homepage Image API Endpoints', () => {
     if (fs.existsSync(testImagePath)) {
       fs.unlinkSync(testImagePath);
     }
+    mockStorage.clear();
   });
 
   describe('GET /api/homepage-image', () => {
@@ -80,22 +92,11 @@ describe('Homepage Image API Endpoints', () => {
       const res = await request(app).get('/api/homepage-image?info=true');
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data).toHaveProperty('imageUrl');
+      expect(res.body.data).toHaveProperty('key');
     });
   });
 
   describe('POST /api/homepage-image', () => {
-    it('should update homepage image with a valid imageUrl string', async () => {
-      const newUrl = 'https://images.pexels.com/photos/6523303/pexels-photo-6523303.jpeg?w=1600';
-      const res = await request(app)
-        .post('/api/homepage-image')
-        .send({ imageUrl: newUrl });
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.imageUrl).toBe(newUrl);
-    });
-
     it('should upload image file and resize width to 1600px', async () => {
       const res = await request(app)
         .post('/api/homepage-image')
@@ -103,7 +104,7 @@ describe('Homepage Image API Endpoints', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.imageUrl).toMatch(/^\/r2\/homePage\/homepage-\d+\.png$/);
+      expect(res.body.data.key).toBe('homePage/homepageImage');
       expect(res.body.data.width).toBe(1600);
       expect(res.body.data.height).toBe(800); // 2400x1200 scaled to width 1600 maintains 2:1 aspect ratio
 
@@ -114,7 +115,7 @@ describe('Homepage Image API Endpoints', () => {
       expect(Number(getRes.headers['content-length'])).toBeGreaterThan(0);
     });
 
-    it('should return 400 Bad Request when no image file or URL is provided', async () => {
+    it('should return 400 Bad Request when no image file is provided', async () => {
       const res = await request(app)
         .post('/api/homepage-image')
         .send({});
@@ -122,16 +123,6 @@ describe('Homepage Image API Endpoints', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toContain('Image is required');
-    });
-
-    it('should return 400 Bad Request when invalid imageUrl string is provided', async () => {
-      const res = await request(app)
-        .post('/api/homepage-image')
-        .send({ imageUrl: 'not-a-valid-url' });
-
-      expect(res.statusCode).toBe(400);
-      expect(res.body.success).toBe(false);
-      expect(res.body.error).toContain('must be a valid HTTP/HTTPS URL');
     });
   });
 });

@@ -14,7 +14,13 @@ const readInfoData = () => {
         email: "info@prketalandlos.com",
         phone: "+962790000000",
         whatsappLink: "https://wa.me/962790000000",
-        location: "Amman, Jordan"
+        location: "Amman, Jordan",
+        stats: [
+          { value: "30+", label: "Years of Craft" },
+          { value: "1,200", label: "Floors Installed" },
+          { value: "9", label: "Wood Collections" },
+          { value: "4.9", label: "Average Rating" }
+        ]
       };
     }
     const content = fs.readFileSync(dataFilePath, 'utf8');
@@ -27,7 +33,13 @@ const readInfoData = () => {
       email: "info@prketalandlos.com",
       phone: "+962790000000",
       whatsappLink: "https://wa.me/962790000000",
-      location: "Amman, Jordan"
+      location: "Amman, Jordan",
+      stats: [
+        { value: "30+", label: "Years of Craft" },
+        { value: "1,200", label: "Floors Installed" },
+        { value: "9", label: "Wood Collections" },
+        { value: "4.9", label: "Average Rating" }
+      ]
     };
   }
 };
@@ -60,7 +72,7 @@ exports.getInfo = (req, res) => {
 exports.updateInfo = (req, res) => {
   try {
     const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location } = req.body;
+    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats } = req.body;
 
     // Update with new values if provided, or retain current ones
     const updatedData = {
@@ -69,7 +81,8 @@ exports.updateInfo = (req, res) => {
       email: email !== undefined ? String(email) : currentData.email,
       phone: phone !== undefined ? String(phone) : currentData.phone,
       whatsappLink: whatsappLink !== undefined ? String(whatsappLink) : currentData.whatsappLink,
-      location: location !== undefined ? String(location) : currentData.location
+      location: location !== undefined ? String(location) : currentData.location,
+      stats: stats !== undefined ? stats : currentData.stats
     };
 
     const saved = saveInfoData(updatedData);
