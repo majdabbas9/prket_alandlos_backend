@@ -15,6 +15,7 @@ const readInfoData = () => {
         phone: "+962790000000",
         whatsappLink: "https://wa.me/962790000000",
         location: "Amman, Jordan",
+        description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
         stats: [
           { value: "30+", label: "Years of Craft" },
           { value: "1,200", label: "Floors Installed" },
@@ -34,6 +35,7 @@ const readInfoData = () => {
       phone: "+962790000000",
       whatsappLink: "https://wa.me/962790000000",
       location: "Amman, Jordan",
+      description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
       stats: [
         { value: "30+", label: "Years of Craft" },
         { value: "1,200", label: "Floors Installed" },
@@ -72,7 +74,7 @@ exports.getInfo = (req, res) => {
 exports.updateInfo = (req, res) => {
   try {
     const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats } = req.body;
+    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description } = req.body;
 
     // Update with new values if provided, or retain current ones
     const updatedData = {
@@ -82,6 +84,7 @@ exports.updateInfo = (req, res) => {
       phone: phone !== undefined ? String(phone) : currentData.phone,
       whatsappLink: whatsappLink !== undefined ? String(whatsappLink) : currentData.whatsappLink,
       location: location !== undefined ? String(location) : currentData.location,
+      description: description !== undefined ? String(description) : currentData.description,
       stats: stats !== undefined ? stats : currentData.stats
     };
 
