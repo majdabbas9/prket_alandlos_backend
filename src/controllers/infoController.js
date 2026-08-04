@@ -16,6 +16,9 @@ const readInfoData = () => {
         whatsappLink: "https://wa.me/962790000000",
         location: "Amman, Jordan",
         description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
+        showroomEyebrow: "Visit Our Showroom",
+        showroomTitle: "Come feel the grain for yourself",
+        showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
         stats: [
           { value: "30+", label: "Years of Craft" },
           { value: "1,200", label: "Floors Installed" },
@@ -36,6 +39,9 @@ const readInfoData = () => {
       whatsappLink: "https://wa.me/962790000000",
       location: "Amman, Jordan",
       description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
+      showroomEyebrow: "Visit Our Showroom",
+      showroomTitle: "Come feel the grain for yourself",
+      showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
       stats: [
         { value: "30+", label: "Years of Craft" },
         { value: "1,200", label: "Floors Installed" },
@@ -74,7 +80,7 @@ exports.getInfo = (req, res) => {
 exports.updateInfo = (req, res) => {
   try {
     const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description } = req.body;
+    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription } = req.body;
 
     // Update with new values if provided, or retain current ones
     const updatedData = {
@@ -85,6 +91,9 @@ exports.updateInfo = (req, res) => {
       whatsappLink: whatsappLink !== undefined ? String(whatsappLink) : currentData.whatsappLink,
       location: location !== undefined ? String(location) : currentData.location,
       description: description !== undefined ? String(description) : currentData.description,
+      showroomEyebrow: showroomEyebrow !== undefined ? String(showroomEyebrow) : currentData.showroomEyebrow,
+      showroomTitle: showroomTitle !== undefined ? String(showroomTitle) : currentData.showroomTitle,
+      showroomDescription: showroomDescription !== undefined ? String(showroomDescription) : currentData.showroomDescription,
       stats: stats !== undefined ? stats : currentData.stats
     };
 
