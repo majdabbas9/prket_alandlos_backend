@@ -19,6 +19,9 @@ const readInfoData = () => {
         showroomEyebrow: "Visit Our Showroom",
         showroomTitle: "Come feel the grain for yourself",
         showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
+        contactEyebrow: "Get in Touch",
+        contactTitle: "Let's talk about your floor",
+        contactDescription: "Whether you're planning a renovation or just exploring finishes, our specialists are here to help. Reach out and we'll find the right wood for your space.",
         stats: [
           { value: "30+", label: "Years of Craft" },
           { value: "1,200", label: "Floors Installed" },
@@ -42,6 +45,9 @@ const readInfoData = () => {
       showroomEyebrow: "Visit Our Showroom",
       showroomTitle: "Come feel the grain for yourself",
       showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
+      contactEyebrow: "Get in Touch",
+      contactTitle: "Let's talk about your floor",
+      contactDescription: "Whether you're planning a renovation or just exploring finishes, our specialists are here to help. Reach out and we'll find the right wood for your space.",
       stats: [
         { value: "30+", label: "Years of Craft" },
         { value: "1,200", label: "Floors Installed" },
@@ -80,7 +86,7 @@ exports.getInfo = (req, res) => {
 exports.updateInfo = (req, res) => {
   try {
     const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription } = req.body;
+    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription, contactEyebrow, contactTitle, contactDescription } = req.body;
 
     // Update with new values if provided, or retain current ones
     const updatedData = {
@@ -94,6 +100,9 @@ exports.updateInfo = (req, res) => {
       showroomEyebrow: showroomEyebrow !== undefined ? String(showroomEyebrow) : currentData.showroomEyebrow,
       showroomTitle: showroomTitle !== undefined ? String(showroomTitle) : currentData.showroomTitle,
       showroomDescription: showroomDescription !== undefined ? String(showroomDescription) : currentData.showroomDescription,
+      contactEyebrow: contactEyebrow !== undefined ? String(contactEyebrow) : currentData.contactEyebrow,
+      contactTitle: contactTitle !== undefined ? String(contactTitle) : currentData.contactTitle,
+      contactDescription: contactDescription !== undefined ? String(contactDescription) : currentData.contactDescription,
       stats: stats !== undefined ? stats : currentData.stats
     };
 
