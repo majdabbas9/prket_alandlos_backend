@@ -86,7 +86,7 @@ exports.getInfo = (req, res) => {
 exports.updateInfo = (req, res) => {
   try {
     const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription, contactEyebrow, contactTitle, contactDescription } = req.body;
+    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription, contactEyebrow, contactTitle, contactDescription, heroEyebrow, heroTitle, heroDescription } = req.body;
 
     // Update with new values if provided, or retain current ones
     const updatedData = {
@@ -103,6 +103,9 @@ exports.updateInfo = (req, res) => {
       contactEyebrow: contactEyebrow !== undefined ? String(contactEyebrow) : currentData.contactEyebrow,
       contactTitle: contactTitle !== undefined ? String(contactTitle) : currentData.contactTitle,
       contactDescription: contactDescription !== undefined ? String(contactDescription) : currentData.contactDescription,
+      heroEyebrow: heroEyebrow !== undefined ? String(heroEyebrow) : currentData.heroEyebrow,
+      heroTitle: heroTitle !== undefined ? String(heroTitle) : currentData.heroTitle,
+      heroDescription: heroDescription !== undefined ? String(heroDescription) : currentData.heroDescription,
       stats: stats !== undefined ? stats : currentData.stats
     };
 
