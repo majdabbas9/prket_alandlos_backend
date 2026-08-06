@@ -1,160 +1,55 @@
 const fs = require('fs');
-const path = require('path');
-const sharp = require('sharp');
+const Logo = require('../models/Logo');
 const logger = require('../utils/logger').getLogger(__filename);
 
-const uploadsDir = path.join(__dirname, '../../uploads');
-const logoDir = path.join(__dirname, '../../uploads/logo');
-const dataFilePath = path.join(__dirname, '../data/logo.json');
+// Local variable to store current logo model instance in memory
+let currentLogo = new Logo();
 
-const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.avif'];
-
-// Helper to locate the actual logo file on disk inside uploads/logo
-const getActualLogoFilePath = () => {
-  if (!fs.existsSync(logoDir)) {
-    logger.info({ logoDir }, 'Logo directory does not exist');
-    return null;
-  }
-
-  // 1. Check if logo.json exists and points to a valid file on disk
-  if (fs.existsSync(dataFilePath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(dataFilePath, 'utf8'));
-      if (data.logoUrl && data.logoUrl.startsWith('/uploads/')) {
-        const relativePath = data.logoUrl.replace(/^\/uploads\//, '');
-        const targetPath = path.join(uploadsDir, relativePath);
-        if (fs.existsSync(targetPath)) {
-          logger.info({ targetPath }, 'Found logo file from logo.json manifest');
-          return targetPath;
-        }
-      }
-    } catch (e) {
-      logger.warn({ err: e }, 'Error reading logo.json manifest, falling back to directory scan');
-    }
-  }
-
-  // 2. Scan uploads/logo folder for valid image files
-  try {
-    const files = fs.readdirSync(logoDir);
-    const imageFiles = files.filter((file) => {
-      const ext = path.extname(file).toLowerCase();
-      return VALID_EXTENSIONS.includes(ext);
-    });
-
-    if (imageFiles.length === 0) {
-      logger.warn({ logoDir }, 'No valid image files found in logo directory');
-      return null;
-    }
-
-    // Sort by modification time (most recent first)
-    const sorted = imageFiles
-      .map((file) => {
-        const filePath = path.join(logoDir, file);
-        const stat = fs.statSync(filePath);
-        return { file, filePath, mtime: stat.mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
-
-    logger.info({ chosenFile: sorted[0].filePath }, 'Found most recent logo file via directory scan');
-    return sorted[0].filePath;
-  } catch (error) {
-    logger.error({ err: error }, 'Error scanning logo directory');
-    return null;
-  }
-};
-
-// 1. GET /api/logo - Returns the actual logo file binary directly from uploads/logo
+// 1. GET Logo Image (returns the actual image file binary, or JSON metadata if ?info=true or ?json=true)
 exports.getLogo = async (req, res) => {
   logger.info({ query: req.query }, 'GET /api/logo - Fetching logo');
-  const filePath = getActualLogoFilePath();
+  try {
+    const { buffer, contentType, metadata } = await Logo.getImageData(currentLogo.key);
+    currentLogo = metadata;
 
-  if (!filePath || !fs.existsSync(filePath)) {
-    logger.warn({ filePath }, 'Logo image file not found');
-    return res.status(404).json({
+    // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
+    if (req.query.info === 'true' || req.query.json === 'true') {
+      logger.info({ key: currentLogo.key }, 'Returning logo JSON metadata to client');
+      return res.status(200).json({
+        success: true,
+        data: currentLogo.toJSON()
+      });
+    }
+
+    res.setHeader('Content-Type', contentType);
+    if (buffer.length) {
+      res.setHeader('Content-Length', buffer.length);
+    }
+
+    logger.info({ contentType, sizeBytes: buffer.length }, 'Serving logo binary file');
+    return res.status(200).send(buffer);
+  } catch (error) {
+    logger.error({ err: error }, 'Error fetching/serving logo');
+    return res.status(500).json({
       success: false,
-      error: 'Logo image file not found in uploads/logo directory'
+      error: 'Failed to retrieve or initialize logo: ' + error.message
     });
   }
-
-  // If client specifically requests JSON metadata (?info=true or ?json=true)
-  if (req.query.info === 'true' || req.query.json === 'true') {
-    const filename = path.basename(filePath);
-    const stat = fs.statSync(filePath);
-    logger.info({ filename, size: stat.size }, 'Serving logo metadata JSON');
-    return res.status(200).json({
-      success: true,
-      data: {
-        logoUrl: `/uploads/logo/${filename}`,
-        filename,
-        size: stat.size,
-        updatedAt: stat.mtime.toISOString()
-      }
-    });
-  }
-
-  logger.info({ filePath }, 'Serving logo file binary');
-  return res.sendFile(filePath);
 };
 
-// 2. GET /api/logo/:filename - Returns a specific file from uploads/logo folder
+// 2. GET /api/logo/:filename - Fetch logo by filename (alias/compatibility endpoint)
 exports.getLogoByName = async (req, res) => {
-  const filename = path.basename(req.params.filename);
-  const filePath = path.join(logoDir, filename);
-  logger.info({ filename, filePath }, 'GET /api/logo/:filename - Fetching logo by filename');
-
-  if (!fs.existsSync(filePath)) {
-    logger.warn({ filename, filePath }, 'Logo file by name not found');
-    return res.status(404).json({
-      success: false,
-      error: `File ${filename} not found in uploads/logo directory`
-    });
-  }
-
-  return res.sendFile(filePath);
+  logger.info({ filename: req.params.filename }, 'GET /api/logo/:filename - Fetching logo by filename');
+  return exports.getLogo(req, res);
 };
 
-// 3. POST /api/logo - Update or upload logo image file into uploads/logo directory
+// 3. POST Update Logo Image
 exports.updateLogo = async (req, res) => {
   logger.info({ hasFile: !!req.file, hasFiles: !!req.files, body: req.body }, 'POST /api/logo - Updating logo');
   try {
     const uploadedFile = req.file || (req.files && (req.files.image?.[0] || req.files.logo?.[0]));
-    let updatedLogoUrl = req.body ? req.body.logoUrl || req.body.imageUrl : null;
-    let width = null;
-    let height = null;
-    let mimeType = 'image/jpeg';
-    let size = null;
-    let filename = null;
 
-    if (!fs.existsSync(logoDir)) {
-      logger.info({ logoDir }, 'Creating logo directory');
-      fs.mkdirSync(logoDir, { recursive: true });
-    }
-
-    if (uploadedFile) {
-      const originalFilePath = uploadedFile.path;
-      const fileExt = path.extname(uploadedFile.originalname).toLowerCase() || '.jpg';
-      filename = `logo-${Date.now()}${fileExt}`;
-      const outputFilePath = path.join(logoDir, filename);
-
-      try {
-        const metadata = await sharp(originalFilePath).metadata();
-        width = metadata.width || null;
-        height = metadata.height || null;
-        mimeType = `image/${metadata.format || 'jpeg'}`;
-        logger.info({ width, height, mimeType }, 'Extracted uploaded logo image metadata via sharp');
-      } catch (err) {
-        logger.warn({ err }, 'Could not extract image metadata via sharp');
-      }
-
-      fs.renameSync(originalFilePath, outputFilePath);
-
-      const fileStats = fs.statSync(outputFilePath);
-      size = fileStats.size;
-      updatedLogoUrl = `/uploads/logo/${filename}`;
-      logger.info({ outputFilePath, size }, 'Saved logo file to disk');
-    }
-
-    if (!updatedLogoUrl || typeof updatedLogoUrl !== 'string' || !updatedLogoUrl.trim()) {
+    if (!uploadedFile && (!req.body || (!req.body.logoUrl && !req.body.imageUrl))) {
       logger.warn('Logo update failed: missing logo file or logoUrl payload');
       return res.status(400).json({
         success: false,
@@ -162,30 +57,35 @@ exports.updateLogo = async (req, res) => {
       });
     }
 
-    const cleanUrl = updatedLogoUrl.trim();
-    filename = filename || path.basename(cleanUrl);
+    if (uploadedFile) {
+      const originalFilePath = uploadedFile.path;
+      logger.info({ originalFilePath }, 'Updating logo with uploaded file');
+      const updatedLogo = await Logo.updateImage(originalFilePath, currentLogo.key);
+      currentLogo = updatedLogo;
 
-    const newLogoData = {
-      logoUrl: cleanUrl,
-      filename,
-      width,
-      height,
-      mimeType,
-      size,
-      updatedAt: new Date().toISOString()
-    };
-
-    const dirPath = path.dirname(dataFilePath);
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+      if (fs.existsSync(originalFilePath)) {
+        try {
+          fs.unlinkSync(originalFilePath);
+          logger.info({ originalFilePath }, 'Successfully cleaned up temporary logo upload file');
+        } catch (unlinkErr) {
+          logger.error({ err: unlinkErr, originalFilePath }, 'Error removing temp logo upload file');
+        }
+      }
+    } else if (req.body && (req.body.logoUrl || req.body.imageUrl)) {
+      const newUrl = (req.body.logoUrl || req.body.imageUrl).trim();
+      currentLogo = new Logo({
+        key: currentLogo.key,
+        logoUrl: newUrl,
+        filename: newUrl.split('/').pop() || '12.jpg',
+        updatedAt: new Date().toISOString()
+      });
     }
-    fs.writeFileSync(dataFilePath, JSON.stringify(newLogoData, null, 2), 'utf8');
-    logger.info({ newLogoData }, 'Saved logo metadata to logo.json manifest');
 
+    logger.info({ data: currentLogo.toJSON() }, 'Logo image updated successfully');
     return res.status(200).json({
       success: true,
       message: 'Logo image updated successfully',
-      data: newLogoData
+      data: currentLogo.toJSON()
     });
   } catch (error) {
     logger.error({ err: error }, 'Error updating logo image');
@@ -195,4 +95,3 @@ exports.updateLogo = async (req, res) => {
     });
   }
 };
-

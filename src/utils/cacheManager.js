@@ -4,6 +4,7 @@ const cache = new Map();
 
 const KEYS = {
   HOMEPAGE_IMAGE: 'homepage_image',
+  LOGO_IMAGE: 'logo_image',
   STORE_INFO: 'store_info'
 };
 
