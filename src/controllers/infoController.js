@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const Info = require('../models/Info');
 
 const dataFilePath = path.join(__dirname, '../data/info.json');
 
@@ -8,125 +9,73 @@ const dataFilePath = path.join(__dirname, '../data/info.json');
 const readInfoData = () => {
   try {
     if (!fs.existsSync(dataFilePath)) {
-      return {
-        showPrice: true,
-        storeOpeningTime: "9:00 AM - 10:00 PM",
-        email: "info@prketalandlos.com",
-        phone: "+962790000000",
-        whatsappLink: "https://wa.me/962790000000",
-        location: "Amman, Jordan",
-        description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
-        showroomEyebrow: "Visit Our Showroom",
-        showroomTitle: "Come feel the grain for yourself",
-        showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
-        contactEyebrow: "Get in Touch",
-        contactTitle: "Let's talk about your floor",
-        contactDescription: "Whether you're planning a renovation or just exploring finishes, our specialists are here to help. Reach out and we'll find the right wood for your space.",
-        stats: [
-          { value: "30+", label: "Years of Craft" },
-          { value: "1,200", label: "Floors Installed" },
-          { value: "9", label: "Wood Collections" },
-          { value: "4.9", label: "Average Rating" }
-        ]
-      };
+      logger.info('info.json file not found, returning default Store Info instance');
+      return new Info();
     }
     const content = fs.readFileSync(dataFilePath, 'utf8');
-    return JSON.parse(content || '{}');
+    return Info.fromJSON(content);
   } catch (error) {
-    logger.error({ err: error }, 'Error reading info.json');
-    return {
-      showPrice: true,
-      storeOpeningTime: "9:00 AM - 10:00 PM",
-      email: "info@prketalandlos.com",
-      phone: "+962790000000",
-      whatsappLink: "https://wa.me/962790000000",
-      location: "Amman, Jordan",
-      description: "Premium wood flooring, crafted with patience. Sustainably sourced hardwoods finished by hand for floors that last generations.",
-      showroomEyebrow: "Visit Our Showroom",
-      showroomTitle: "Come feel the grain for yourself",
-      showroomDescription: "Our showroom is a tactile library of every finish and pattern we craft. Walk on the floors, talk to our makers, and find the one that feels like home.",
-      contactEyebrow: "Get in Touch",
-      contactTitle: "Let's talk about your floor",
-      contactDescription: "Whether you're planning a renovation or just exploring finishes, our specialists are here to help. Reach out and we'll find the right wood for your space.",
-      stats: [
-        { value: "30+", label: "Years of Craft" },
-        { value: "1,200", label: "Floors Installed" },
-        { value: "9", label: "Wood Collections" },
-        { value: "4.9", label: "Average Rating" }
-      ]
-    };
+    logger.error({ err: error }, 'Error reading info.json file');
+    return new Info();
   }
 };
 
 // Helper to save info metadata
-const saveInfoData = (data) => {
+const saveInfoData = (infoInstance) => {
   try {
     const dirPath = path.dirname(dataFilePath);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
-    fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf8');
+    const dataToSave = infoInstance instanceof Info ? infoInstance.toJSON() : infoInstance;
+    fs.writeFileSync(dataFilePath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    logger.info('Successfully saved store info data to info.json');
     return true;
   } catch (error) {
-    logger.error({ err: error }, 'Error writing info.json');
+    logger.error({ err: error }, 'Error writing info.json file');
     return false;
   }
 };
 
 // GET /api/info
 exports.getInfo = (req, res) => {
-  const data = readInfoData();
+  logger.info('GET /api/info - Fetching store information');
+  const infoObj = readInfoData();
   return res.status(200).json({
     success: true,
-    data
+    data: infoObj.toJSON()
   });
 };
 
 // POST /api/info
 exports.updateInfo = (req, res) => {
+  logger.info({ body: req.body }, 'POST /api/info - Updating store information');
   try {
-    const currentData = readInfoData();
-    const { showPrice, storeOpeningTime, email, phone, whatsappLink, location, stats, description, showroomEyebrow, showroomTitle, showroomDescription, contactEyebrow, contactTitle, contactDescription, heroEyebrow, heroTitle, heroDescription } = req.body;
+    const currentInfo = readInfoData();
+    currentInfo.update(req.body);
 
-    // Update with new values if provided, or retain current ones
-    const updatedData = {
-      showPrice: typeof showPrice === 'boolean' ? showPrice : (showPrice === 'true' ? true : (showPrice === 'false' ? false : currentData.showPrice)),
-      storeOpeningTime: storeOpeningTime !== undefined ? String(storeOpeningTime) : currentData.storeOpeningTime,
-      email: email !== undefined ? String(email) : currentData.email,
-      phone: phone !== undefined ? String(phone) : currentData.phone,
-      whatsappLink: whatsappLink !== undefined ? String(whatsappLink) : currentData.whatsappLink,
-      location: location !== undefined ? String(location) : currentData.location,
-      description: description !== undefined ? String(description) : currentData.description,
-      showroomEyebrow: showroomEyebrow !== undefined ? String(showroomEyebrow) : currentData.showroomEyebrow,
-      showroomTitle: showroomTitle !== undefined ? String(showroomTitle) : currentData.showroomTitle,
-      showroomDescription: showroomDescription !== undefined ? String(showroomDescription) : currentData.showroomDescription,
-      contactEyebrow: contactEyebrow !== undefined ? String(contactEyebrow) : currentData.contactEyebrow,
-      contactTitle: contactTitle !== undefined ? String(contactTitle) : currentData.contactTitle,
-      contactDescription: contactDescription !== undefined ? String(contactDescription) : currentData.contactDescription,
-      heroEyebrow: heroEyebrow !== undefined ? String(heroEyebrow) : currentData.heroEyebrow,
-      heroTitle: heroTitle !== undefined ? String(heroTitle) : currentData.heroTitle,
-      heroDescription: heroDescription !== undefined ? String(heroDescription) : currentData.heroDescription,
-      stats: stats !== undefined ? stats : currentData.stats
-    };
-
-    const saved = saveInfoData(updatedData);
+    const saved = saveInfoData(currentInfo);
     if (!saved) {
+      logger.warn('Failed to save updated store info to info.json');
       return res.status(500).json({
         success: false,
         error: 'Failed to write updated info data'
       });
     }
 
+    logger.info('POST /api/info - Store information updated successfully');
     return res.status(200).json({
       success: true,
       message: 'Store information updated successfully',
-      data: updatedData
+      data: currentInfo.toJSON()
     });
   } catch (error) {
-    logger.error({ err: error }, 'Error updating info');
+    logger.error({ err: error }, 'Error updating store information');
     return res.status(500).json({
       success: false,
       error: 'Failed to update store information: ' + error.message
     });
   }
 };
+
+
