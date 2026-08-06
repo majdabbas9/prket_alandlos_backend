@@ -23,10 +23,15 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(storageKey);
     return { success: true };
   });
+  const ObjectExists = jest.fn(async (key, bucketName) => {
+    const storageKey = `${bucketName}:${key}`;
+    return mockStorage.has(storageKey);
+  });
   return {
     getObject,
     putObject,
     deleteObject,
+    ObjectExists,
     getImage: getObject,
     uploadImage: putObject,
     deleteImage: deleteObject,

@@ -25,10 +25,14 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(key);
     return { success: true };
   });
+  const ObjectExists = jest.fn(async (key) => {
+    return mockStorage.has(key);
+  });
   return {
     getObject,
     putObject,
     deleteObject,
+    ObjectExists,
     getImage: getObject,
     uploadImage: putObject,
     deleteImage: deleteObject,
@@ -94,11 +98,12 @@ describe('Homepage Image API Endpoints', () => {
       }
     });
 
-    it('should return JSON metadata when ?info=true query parameter is passed', async () => {
-      const res = await request(app).get('/api/homepage-image?info=true');
+    it('should create default parket image on R2 if key does not exist', async () => {
+      mockStorage.clear();
+      const res = await request(app).get('/api/homepage-image');
       expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data).toHaveProperty('key');
+      expect(res.headers['content-type']).toMatch(/image\/(jpeg|png|webp|avif|gif)/);
+      expect(mockStorage.has('homePage/homepageImage')).toBe(true);
     });
   });
 
