@@ -1,3 +1,5 @@
+const logger = require('../utils/logger').getLogger(__filename);
+
 /**
  * Class representing the Store Info structure.
  */
@@ -69,6 +71,7 @@ class Info {
    * @returns {Info} Updated instance
    */
   update(updateData = {}) {
+    logger.info({ fieldsUpdated: Object.keys(updateData) }, 'Updating Info model instance properties');
     if (updateData.showPrice !== undefined) {
       this.showPrice = typeof updateData.showPrice === 'boolean'
         ? updateData.showPrice
@@ -129,11 +132,17 @@ class Info {
    * @returns {Info}
    */
   static fromJSON(input) {
-    if (!input) return new Info();
+    if (!input) {
+      logger.info('fromJSON called with empty input, returning default Info instance');
+      return new Info();
+    }
     if (typeof input === 'string') {
       try {
-        return new Info(JSON.parse(input));
+        const parsed = JSON.parse(input);
+        logger.info('Successfully parsed Info JSON string');
+        return new Info(parsed);
       } catch (e) {
+        logger.error({ err: e }, 'Failed to parse Info JSON string, falling back to default Info instance');
         return new Info();
       }
     }
@@ -142,3 +151,4 @@ class Info {
 }
 
 module.exports = Info;
+

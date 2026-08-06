@@ -1,7 +1,7 @@
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
-const logger = require('../utils/logger');
-const homepageCache = require('../utils/homepageCache');
+const logger = require('../utils/logger').getLogger(__filename);
+const cacheManager = require('../utils/cacheManager');
 
 const HOMEPAGE_KEY = 'homePage/homepageImage';
 const DEFAULT_PARKET_IMAGE_URL = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1600&auto=format&fit=crop';
@@ -51,12 +51,14 @@ class Homepage {
    * @returns {Promise<{buffer: Buffer, width: number, height: number, mimeType: string, size: number}>}
    */
   static async downloadOrGenerateParketImage() {
+    logger.info({ url: DEFAULT_PARKET_IMAGE_URL }, 'Downloading default parket image from internet URL');
     let imageBuffer = null;
     try {
       const response = await fetch(DEFAULT_PARKET_IMAGE_URL);
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer();
         imageBuffer = Buffer.from(arrayBuffer);
+        logger.info({ sizeBytes: imageBuffer.length }, 'Successfully downloaded default parket image');
       } else {
         logger.warn({ status: response.status }, 'Failed to fetch default parket image from internet URL');
       }
@@ -65,7 +67,7 @@ class Homepage {
     }
 
     if (!imageBuffer) {
-      logger.info('Generating fallback parket image buffer with sharp');
+      logger.info('Generating fallback parket image buffer using sharp generator');
       imageBuffer = await sharp({
         create: {
           width: 1600,
@@ -80,6 +82,7 @@ class Homepage {
     const meta = await sharp(imageBuffer).metadata();
 
     if (meta.width && meta.width !== 1600) {
+      logger.info({ originalWidth: meta.width, targetWidth: 1600 }, 'Resizing parket image to standard target width 1600');
       sharpPipeline = sharpPipeline.resize({ width: 1600, withoutEnlargement: false });
     }
 
@@ -102,12 +105,13 @@ class Homepage {
    * @returns {Promise<{buffer: Buffer, contentType: string, metadata: Homepage}>}
    */
   static async getImageData(key = HOMEPAGE_KEY) {
+    logger.info({ key }, 'Checking homepage image data availability');
     let keyExists = false;
     if (typeof R2.ObjectExists === 'function') {
       try {
         keyExists = await R2.ObjectExists(key);
       } catch (checkErr) {
-        logger.warn({ err: checkErr }, 'Error checking R2 object existence');
+        logger.warn({ err: checkErr, key }, 'Error checking R2 object existence');
         keyExists = false;
       }
     }
@@ -126,7 +130,7 @@ class Homepage {
         updatedAt: new Date().toISOString()
       });
 
-      homepageCache.set(defaultImg.buffer, defaultImg.mimeType);
+      cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
 
       return {
         buffer: defaultImg.buffer,
@@ -136,16 +140,16 @@ class Homepage {
     }
 
     // Key exists on R2 - check cache first
-    const cached = homepageCache.get();
+    const cached = cacheManager.get(cacheManager.KEYS.HOMEPAGE_IMAGE);
     let buffer;
     let contentType;
 
     if (cached) {
-      logger.info('Serving homepage image from cache');
+      logger.info({ key }, 'Serving homepage image from cache');
       buffer = cached.buffer;
       contentType = cached.contentType;
     } else {
-      logger.info('handle R2 file');
+      logger.info({ key }, 'Retrieving homepage image from R2');
       const response = await R2.getObject(key);
       contentType = response.ContentType || 'image/jpeg';
 
@@ -155,8 +159,8 @@ class Homepage {
       }
       buffer = Buffer.concat(chunks);
 
-      homepageCache.set(buffer, contentType);
-      logger.info('the image has been sent and cached');
+      cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType });
+      logger.info({ key, contentType, sizeBytes: buffer.length }, 'Homepage image retrieved from R2 and cached');
     }
 
     const homepageModel = new Homepage({
@@ -179,7 +183,7 @@ class Homepage {
    * @returns {Promise<Homepage>}
    */
   static async updateImage(originalFilePath, key = HOMEPAGE_KEY) {
-    logger.info('Uploading homepage image');
+    logger.info({ originalFilePath, key }, 'Processing and uploading homepage image');
     const image = sharp(originalFilePath);
     const metadata = await image.metadata();
 
@@ -189,6 +193,7 @@ class Homepage {
 
     let sharpPipeline = sharp(originalFilePath).rotate();
     if (origWidth !== TARGET_WIDTH) {
+      logger.info({ origWidth, TARGET_WIDTH }, 'Resizing uploaded image to target width 1600');
       sharpPipeline = sharpPipeline.resize({
         width: TARGET_WIDTH,
         withoutEnlargement: false
@@ -204,8 +209,8 @@ class Homepage {
     const size = buffer.length;
 
     await R2.putObject(key, buffer, mimeType);
-    homepageCache.set(buffer, mimeType);
-    logger.info('homepage image updated successfully');
+    cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType: mimeType });
+    logger.info({ key, width, height, mimeType, size }, 'Homepage image processed and updated successfully');
     return new Homepage({
       key,
       width,
@@ -233,3 +238,4 @@ class Homepage {
 }
 
 module.exports = Homepage;
+

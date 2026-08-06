@@ -1,6 +1,8 @@
 const request = require('supertest');
 const app = require('../app');
 const Info = require('../src/models/Info');
+const cacheManager = require('../src/utils/cacheManager');
+const R2 = require('../src/cloudManager/R2');
 
 const mockStorage = new Map();
 jest.mock('../src/cloudManager/R2', () => {
@@ -41,6 +43,8 @@ jest.mock('../src/cloudManager/R2', () => {
 describe('Info Model & API Endpoints', () => {
   afterEach(() => {
     mockStorage.clear();
+    cacheManager.clear();
+    jest.clearAllMocks();
   });
 
   describe('Info Unit Tests', () => {
@@ -114,6 +118,21 @@ describe('Info Model & API Endpoints', () => {
       const parsed = JSON.parse(stored);
       expect(parsed.email).toBe(Info.getDefaults().email);
     });
+
+    test('serves store info from cache on subsequent requests without calling R2.getObject', async () => {
+      // First request populates cache
+      await request(app).get('/api/info');
+      expect(R2.getObject).not.toHaveBeenCalled(); // First request called ObjectExists and created default, then set cache
+
+      // Reset getObject call count
+      R2.getObject.mockClear();
+
+      // Second GET request should hit the in-memory cache
+      const res = await request(app).get('/api/info');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.email).toBe(Info.getDefaults().email);
+      expect(R2.getObject).not.toHaveBeenCalled();
+    });
   });
 
   describe('POST /api/info', () => {
@@ -141,4 +160,18 @@ describe('Info Model & API Endpoints', () => {
       expect(getRes.body.data.location).toBe('New Location');
     });
   });
+
+  describe('cacheManager Utility Tests', () => {
+    test('gets, sets and clears cacheManager', () => {
+      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
+
+      const sampleInfo = new Info({ email: 'cache@test.com' });
+      cacheManager.set(cacheManager.KEYS.STORE_INFO, sampleInfo);
+      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBe(sampleInfo);
+
+      cacheManager.clear(cacheManager.KEYS.STORE_INFO);
+      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
+    });
+  });
 });
+
