@@ -4,14 +4,22 @@ const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = re
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
 const ENDPOINT = process.env.R2_ENDPOINT || 'https://bdea2f34b203a609c98be2413d4f8aaa.r2.cloudflarestorage.com';
 
-const s3Client = new S3Client({
+const accessKeyId = process.env.ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
+const clientConfig = {
   endpoint: ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.ACCESS_KEY_ID,
-    secretAccessKey: process.env.SECRET_ACCESS_KEY,
-  },
   region: 'auto',
-});
+};
+
+if (accessKeyId && secretAccessKey) {
+  clientConfig.credentials = {
+    accessKeyId,
+    secretAccessKey,
+  };
+}
+
+const s3Client = new S3Client(clientConfig);
 
 /**
  * Retrieves an image object from R2.
