@@ -7,25 +7,31 @@ const sharp = require('sharp');
 // Mock R2 module
 const mockStorage = new Map();
 jest.mock('../src/cloudManager/R2', () => {
+  const getObject = jest.fn(async (key) => {
+    if (mockStorage.has(key)) {
+      return {
+        Body: [mockStorage.get(key)],
+        ContentType: 'image/png',
+        ContentLength: mockStorage.get(key).length,
+      };
+    }
+    throw new Error('NoSuchKey');
+  });
+  const putObject = jest.fn(async (key, body, contentType) => {
+    mockStorage.set(key, body);
+    return { success: true };
+  });
+  const deleteObject = jest.fn(async (key) => {
+    mockStorage.delete(key);
+    return { success: true };
+  });
   return {
-    getImage: jest.fn(async (key) => {
-      if (mockStorage.has(key)) {
-        return {
-          Body: [mockStorage.get(key)],
-          ContentType: 'image/png',
-          ContentLength: mockStorage.get(key).length,
-        };
-      }
-      throw new Error('NoSuchKey');
-    }),
-    uploadImage: jest.fn(async (key, body, contentType) => {
-      mockStorage.set(key, body);
-      return { success: true };
-    }),
-    deleteImage: jest.fn(async (key) => {
-      mockStorage.delete(key);
-      return { success: true };
-    }),
+    getObject,
+    putObject,
+    deleteObject,
+    getImage: getObject,
+    uploadImage: putObject,
+    deleteImage: deleteObject,
   };
 });
 

@@ -52,7 +52,7 @@ exports.getHomepageImage = async (req, res) => {
   logger.info('handle R2 file');
 
   try {
-    const response = await R2.getImage(key);
+    const response = await R2.getObject(key);
     const contentType = response.ContentType || data.mimeType || 'image/jpeg';
     res.setHeader('Content-Type', contentType);
     if (response.ContentLength) {
@@ -129,7 +129,7 @@ exports.updateHomepageImage = async (req, res) => {
 
     // Upload processed buffer to Cloudflare R2
     const r2Key = `homePage/homepageImage`;
-    await R2.uploadImage(r2Key, buffer, mimeType);
+    await R2.putObject(r2Key, buffer, mimeType);
 
     // Update cache
     homepageCache.set(buffer, mimeType);

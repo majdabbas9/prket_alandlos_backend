@@ -1,4 +1,4 @@
-const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 
 // Cloudflare R2 configurations
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
@@ -21,29 +21,17 @@ if (accessKeyId && secretAccessKey) {
 
 const s3Client = new S3Client(clientConfig);
 
-/**
- * Retrieves an image object from R2.
- * @param {string} key
- * @returns {Promise<any>}
- */
-async function getImage(key) {
+async function getObject(key, bucketName = BUCKET_NAME) {
   const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: bucketName,
     Key: key,
   });
   return await s3Client.send(command);
 }
 
-/**
- * Uploads an image buffer or stream to R2.
- * @param {string} key
- * @param {Buffer|ReadableStream} body
- * @param {string} contentType
- * @returns {Promise<any>}
- */
-async function uploadImage(key, body, contentType) {
+async function putObject(key, body, contentType, bucketName = BUCKET_NAME) {
   const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: bucketName,
     Key: key,
     Body: body,
     ContentType: contentType,
@@ -51,21 +39,34 @@ async function uploadImage(key, body, contentType) {
   return await s3Client.send(command);
 }
 
-/**
- * Deletes an image from R2.
- * @param {string} key
- * @returns {Promise<any>}
- */
-async function deleteImage(key) {
+async function deleteObject(key, bucketName = BUCKET_NAME) {
   const command = new DeleteObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: bucketName,
     Key: key,
   });
   return await s3Client.send(command);
 }
 
+async function ObjectExists(key, bucketName = BUCKET_NAME) {
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    await s3Client.send(command);
+    return true;
+  } catch (error) {
+    if (error.name === 'NotFound' || error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 module.exports = {
-  getImage,
-  uploadImage,
-  deleteImage,
+  getObject,
+  putObject,
+  deleteObject,
+  ObjectExists
 };
+
