@@ -42,5 +42,43 @@ const upload = multer({
   fileFilter
 });
 
+const defaultAllowedFields = ['image', 'file', 'photo', 'picture', 'logo'];
+
+/**
+ * Flexible image upload middleware that accepts single file uploads
+ * across common field names ('image', 'file', 'photo', 'picture', 'logo').
+ * Populates `req.file` with the uploaded file object.
+ */
+upload.flexibleSingle = (fields = defaultAllowedFields) => {
+  const fieldsConfig = fields.map((name) => ({ name, maxCount: 1 }));
+  const fieldsMiddleware = upload.fields(fieldsConfig);
+
+  return (req, res, next) => {
+    fieldsMiddleware(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          logger.warn({ err, field: err.field }, `Multer upload error: ${err.message}`);
+          return res.status(400).json({
+            success: false,
+            error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`
+          });
+        }
+        return next(err);
+      }
+
+      if (req.files) {
+        for (const name of fields) {
+          if (req.files[name] && req.files[name][0]) {
+            req.file = req.files[name][0];
+            break;
+          }
+        }
+      }
+      next();
+    });
+  };
+};
+
 module.exports = upload;
+
 

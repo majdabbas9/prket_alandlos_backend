@@ -1,23 +1,45 @@
 const request = require('supertest');
 const app = require('../app');
-const fs = require('fs');
-const path = require('path');
 
-const dataFilePath = path.join(__dirname, '../src/data/products.json');
+// Mock R2 module to handle in-memory storage for products during tests
+const mockStorage = new Map();
+jest.mock('../src/cloudManager/R2', () => {
+  const getObject = jest.fn(async (key) => {
+    if (mockStorage.has(key)) {
+      return {
+        Body: [mockStorage.get(key)],
+        ContentType: 'application/json',
+        ContentLength: mockStorage.get(key).length,
+      };
+    }
+    throw new Error('NoSuchKey');
+  });
+  const putObject = jest.fn(async (key, body, contentType) => {
+    mockStorage.set(key, body);
+    return { success: true };
+  });
+  const deleteObject = jest.fn(async (key) => {
+    mockStorage.delete(key);
+    return { success: true };
+  });
+  const ObjectExists = jest.fn(async (key) => {
+    return mockStorage.has(key);
+  });
+  return {
+    getObject,
+    putObject,
+    deleteObject,
+    ObjectExists,
+  };
+});
 
 describe('Prket Alandlos Backend API Tests', () => {
-  let backupData;
-
   beforeAll(() => {
-    if (fs.existsSync(dataFilePath)) {
-      backupData = fs.readFileSync(dataFilePath, 'utf8');
-    }
+    mockStorage.clear();
   });
 
   afterAll(() => {
-    if (backupData) {
-      fs.writeFileSync(dataFilePath, backupData, 'utf8');
-    }
+    mockStorage.clear();
   });
 
   describe('GET /api/health', () => {
@@ -63,7 +85,7 @@ describe('Prket Alandlos Backend API Tests', () => {
         price: 99.99,
         category: 'Parquet',
         description: 'Created by automated test',
-        imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7'
+        imageKey: 'products/test-image-key.jpeg'
       };
 
       const res = await request(app)
@@ -78,7 +100,33 @@ describe('Prket Alandlos Backend API Tests', () => {
       createdProductId = res.body.data.id;
     });
 
-    it('should fail with 400 when imageUrl is missing', async () => {
+    it('should create a product with file upload using field "file"', async () => {
+      const buffer = Buffer.from('fake image content');
+      const res = await request(app)
+        .post('/api/products')
+        .field('title', 'Product with file field')
+        .field('price', '49.99')
+        .attach('file', buffer, 'sample.jpg');
+
+      expect(res.statusCode).toEqual(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.title).toBe('Product with file field');
+    });
+
+    it('should create a product with file upload using field "image"', async () => {
+      const buffer = Buffer.from('fake image content');
+      const res = await request(app)
+        .post('/api/products')
+        .field('title', 'Product with image field')
+        .field('price', '59.99')
+        .attach('image', buffer, 'sample.jpg');
+
+      expect(res.statusCode).toEqual(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.title).toBe('Product with image field');
+    });
+
+    it('should fail with 400 when imageKey is missing', async () => {
       const res = await request(app)
         .post('/api/products')
         .send({ title: 'No Image Product' });

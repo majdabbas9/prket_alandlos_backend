@@ -57,6 +57,17 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+  if (err && (err.name === 'MulterError' || err.code === 'LIMIT_UNEXPECTED_FILE')) {
+    logger.warn(
+      { err, method: req.method, url: req.originalUrl, field: err.field },
+      `Multer upload error on ${req.method} ${req.originalUrl}: ${err.message}`
+    );
+    return res.status(400).json({
+      success: false,
+      error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`
+    });
+  }
+
   logger.error(
     { err, method: req.method, url: req.originalUrl, status: err.status || 500 },
     `Unhandled Server Error on ${req.method} ${req.originalUrl}: ${err.message}`

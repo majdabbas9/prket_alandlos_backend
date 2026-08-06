@@ -10,6 +10,6 @@ router.get('/', logoController.getLogo);
 router.get('/:filename', logoController.getLogoByName);
 
 // POST update/upload logo image
-router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }]), logoController.updateLogo);
+router.post('/', upload.flexibleSingle(), logoController.updateLogo);
 
 module.exports = router;

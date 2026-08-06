@@ -12,11 +12,11 @@ router.get('/', productController.getAllProducts);
 // 3. GET single product by ID
 router.get('/:id', productController.getProductById);
 
-// 4. POST add new product (accepts JSON body or multipart form-data with file field 'image')
-router.post('/', upload.single('image'), productController.addProduct);
+// 4. POST add new product (accepts JSON body or multipart form-data with file field 'image' or 'file')
+router.post('/', upload.flexibleSingle(), productController.addProduct);
 
 // 5. PUT update product by ID
-router.put('/:id', upload.single('image'), productController.updateProduct);
+router.put('/:id', upload.flexibleSingle(), productController.updateProduct);
 
 // 6. DELETE product by ID
 router.delete('/:id', productController.deleteProduct);

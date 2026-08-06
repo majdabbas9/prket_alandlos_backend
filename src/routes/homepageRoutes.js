@@ -6,7 +6,7 @@ const upload = require('../middleware/upload');
 // GET homepage image details
 router.get('/', homepageController.getHomepageImage);
 
-// POST update homepage image (supports file upload field 'image' or body 'imageUrl')
-router.post('/', upload.single('image'), homepageController.updateHomepageImage);
+// POST update homepage image (supports file upload field 'image', 'file', etc. or body 'imageUrl')
+router.post('/', upload.flexibleSingle(), homepageController.updateHomepageImage);
 
 module.exports = router;
