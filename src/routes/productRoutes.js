@@ -1,7 +1,8 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
 const upload = require('../middleware/upload');
+const auth = require('../middleware/auth');
 
 // 1. GET photo by URL parameter (?url=...) - must be registered before /:id
 router.get('/photo', productController.getPhotoByUrl);
@@ -13,12 +14,12 @@ router.get('/', productController.getAllProducts);
 router.get('/:id', productController.getProductById);
 
 // 4. POST add new product (accepts JSON body or multipart form-data with file field 'image' or 'file')
-router.post('/', upload.flexibleSingle(), productController.addProduct);
+router.post('/', auth, upload.flexibleSingle(), productController.addProduct);
 
 // 5. PUT update product by ID
-router.put('/:id', upload.flexibleSingle(), productController.updateProduct);
+router.put('/:id', auth, upload.flexibleSingle(), productController.updateProduct);
 
 // 6. DELETE product by ID
-router.delete('/:id', productController.deleteProduct);
+router.delete('/:id', auth, productController.deleteProduct);
 
 module.exports = router;

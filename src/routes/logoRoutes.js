@@ -1,7 +1,8 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const logoController = require('../controllers/logoController');
 const upload = require('../middleware/upload');
+const auth = require('../middleware/auth');
 
 // GET actual logo image file directly
 router.get('/', logoController.getLogo);
@@ -10,6 +11,6 @@ router.get('/', logoController.getLogo);
 router.get('/:filename', logoController.getLogoByName);
 
 // POST update/upload logo image
-router.post('/', upload.flexibleSingle(), logoController.updateLogo);
+router.post('/', auth, upload.flexibleSingle(), logoController.updateLogo);
 
 module.exports = router;
