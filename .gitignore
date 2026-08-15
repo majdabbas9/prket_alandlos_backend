@@ -1,6 +1,8 @@
 node_modules/
 data/
-uploads/
+uploads/*
+!uploads/logo/
+!uploads/logo/12.jpg
 .env
 .env.*
 *.log
