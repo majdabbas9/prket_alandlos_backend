@@ -18,7 +18,7 @@ const saveInfoData = async (infoInstance) => {
     logger.info({ bucket: BUCKET_NAME, key: INFO_KEY }, 'Successfully pushed info data to R2');
 
     const infoObj = infoInstance instanceof Info ? infoInstance : new Info(infoInstance);
-    cacheManager.set(cacheManager.KEYS.STORE_INFO, infoObj);
+    await cacheManager.set(cacheManager.KEYS.STORE_INFO, infoObj);
     return true;
   } catch (error) {
     logger.error({ err: error, bucket: BUCKET_NAME, key: INFO_KEY }, 'Error pushing info data to R2');
@@ -29,10 +29,10 @@ const saveInfoData = async (infoInstance) => {
 // Helper to read info metadata from R2 (checks cache first; if miss, checks if key exists in R2 or creates standard defaults)
 const readInfoData = async () => {
   try {
-    const cached = cacheManager.get(cacheManager.KEYS.STORE_INFO);
+    const cached = await cacheManager.get(cacheManager.KEYS.STORE_INFO);
     if (cached) {
       logger.info('Serving store info from cache');
-      return cached;
+      return new Info(cached);
     }
 
     if (!(await R2.ObjectExists(INFO_KEY, BUCKET_NAME))) {
@@ -50,7 +50,7 @@ const readInfoData = async () => {
     logger.info({ bucket: BUCKET_NAME, key: INFO_KEY, sizeBytes: content.length }, 'Successfully retrieved info data from R2');
 
     const infoObj = Info.fromJSON(content);
-    cacheManager.set(cacheManager.KEYS.STORE_INFO, infoObj);
+    await cacheManager.set(cacheManager.KEYS.STORE_INFO, infoObj);
     return infoObj;
   } catch (error) {
     logger.error({ err: error }, 'Error reading store info data');

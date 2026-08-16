@@ -18,7 +18,7 @@ const saveProductsData = async (products) => {
 
     logger.info({ bucket: BUCKET_NAME, key: PRODUCTS_KEY, count: products.length }, 'Pushing products data to R2');
     await R2.putObject(PRODUCTS_KEY, buffer, 'application/json', BUCKET_NAME);
-    cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
+    await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
     logger.info({ bucket: BUCKET_NAME, key: PRODUCTS_KEY }, 'Successfully pushed products data to R2');
     return true;
   } catch (error) {
@@ -30,7 +30,7 @@ const saveProductsData = async (products) => {
 // Helper function to read products data from cache or R2
 const readProductsData = async () => {
   try {
-    const cached = cacheManager.get(cacheManager.KEYS.PRODUCTS);
+    const cached = await cacheManager.get(cacheManager.KEYS.PRODUCTS);
     if (cached) {
       logger.info('Serving products from cache');
       return cached;
@@ -59,7 +59,7 @@ const readProductsData = async () => {
     }
     const content = Buffer.concat(chunks).toString('utf8');
     const products = JSON.parse(content || '[]');
-    cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
+    await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
     logger.info({ count: products.length }, 'Successfully retrieved products from R2');
     return products;
   } catch (error) {

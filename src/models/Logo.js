@@ -145,7 +145,7 @@ class Logo {
         updatedAt: new Date().toISOString()
       });
 
-      cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
+      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
 
       return {
         buffer: defaultImg.buffer,
@@ -155,7 +155,7 @@ class Logo {
     }
 
     // Key exists on R2 - check cache first
-    const cached = cacheManager.get(cacheManager.KEYS.LOGO_IMAGE);
+    const cached = await cacheManager.get(cacheManager.KEYS.LOGO_IMAGE);
     let buffer;
     let contentType;
 
@@ -174,7 +174,7 @@ class Logo {
       }
       buffer = Buffer.concat(chunks);
 
-      cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType });
+      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType });
       logger.info({ key, contentType, sizeBytes: buffer.length }, 'Logo image retrieved from R2 and cached');
     }
 
@@ -215,7 +215,7 @@ class Logo {
     const size = buffer.length;
 
     await R2.putObject(key, buffer, mimeType);
-    cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType: mimeType });
+    await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType: mimeType });
     logger.info({ key, width, height, mimeType, size }, 'Logo image processed and updated successfully');
     return new Logo({
       key,

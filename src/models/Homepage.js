@@ -130,7 +130,7 @@ class Homepage {
         updatedAt: new Date().toISOString()
       });
 
-      cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
+      await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
 
       return {
         buffer: defaultImg.buffer,
@@ -140,7 +140,7 @@ class Homepage {
     }
 
     // Key exists on R2 - check cache first
-    const cached = cacheManager.get(cacheManager.KEYS.HOMEPAGE_IMAGE);
+    const cached = await cacheManager.get(cacheManager.KEYS.HOMEPAGE_IMAGE);
     let buffer;
     let contentType;
 
@@ -159,7 +159,7 @@ class Homepage {
       }
       buffer = Buffer.concat(chunks);
 
-      cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType });
+      await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType });
       logger.info({ key, contentType, sizeBytes: buffer.length }, 'Homepage image retrieved from R2 and cached');
     }
 
@@ -209,7 +209,7 @@ class Homepage {
     const size = buffer.length;
 
     await R2.putObject(key, buffer, mimeType);
-    cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType: mimeType });
+    await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType: mimeType });
     logger.info({ key, width, height, mimeType, size }, 'Homepage image processed and updated successfully');
     return new Homepage({
       key,

@@ -4,6 +4,31 @@ const Info = require('../src/models/Info');
 const cacheManager = require('../src/utils/cacheManager');
 const R2 = require('../src/cloudManager/R2');
 
+const mockCache = new Map();
+jest.mock('../src/utils/cacheManager', () => {
+  return {
+    KEYS: {
+      HOMEPAGE_IMAGE: 'homepage_image',
+      LOGO_IMAGE: 'logo_image',
+      STORE_INFO: 'store_info',
+      PRODUCTS: 'products'
+    },
+    init: jest.fn().mockResolvedValue(),
+    get: jest.fn(async (key) => {
+      const val = mockCache.get(key);
+      return val ? JSON.parse(val) : null;
+    }),
+    set: jest.fn(async (key, value) => {
+      mockCache.set(key, JSON.stringify(value));
+    }),
+    clear: jest.fn(async (key) => {
+      if (key) mockCache.delete(key);
+      else mockCache.clear();
+    }),
+    has: jest.fn(async (key) => mockCache.has(key))
+  };
+});
+
 const mockStorage = new Map();
 jest.mock('../src/cloudManager/R2', () => {
   const getObject = jest.fn(async (key, bucketName) => {
@@ -41,9 +66,9 @@ jest.mock('../src/cloudManager/R2', () => {
 });
 
 describe('Info Model & API Endpoints', () => {
-  afterEach(() => {
+  afterEach(async () => {
     mockStorage.clear();
-    cacheManager.clear();
+    await cacheManager.clear();
     jest.clearAllMocks();
   });
 
@@ -162,15 +187,17 @@ describe('Info Model & API Endpoints', () => {
   });
 
   describe('cacheManager Utility Tests', () => {
-    test('gets, sets and clears cacheManager', () => {
-      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
+    test('gets, sets and clears cacheManager', async () => {
+      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
 
       const sampleInfo = new Info({ email: 'cache@test.com' });
-      cacheManager.set(cacheManager.KEYS.STORE_INFO, sampleInfo);
-      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBe(sampleInfo);
+      await cacheManager.set(cacheManager.KEYS.STORE_INFO, sampleInfo);
+      
+      const retrieved = await cacheManager.get(cacheManager.KEYS.STORE_INFO);
+      expect(retrieved.email).toBe(sampleInfo.email);
 
-      cacheManager.clear(cacheManager.KEYS.STORE_INFO);
-      expect(cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
+      await cacheManager.clear(cacheManager.KEYS.STORE_INFO);
+      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
     });
   });
 });
