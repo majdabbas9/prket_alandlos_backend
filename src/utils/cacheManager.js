@@ -14,10 +14,10 @@ let redisClient;
  * Initializes the Redis client connection.
  */
 async function init() {
+  console.log(`trying to connect to redis at ${process.env.REDIS_URL}`);
   redisClient = createClient({
     url: process.env.REDIS_URL
   });
-  console.log(`trying to connect to redis at ${process.env.REDIS_URL}`);
   redisClient.on('error', (err) => logger.error({ err }, 'Redis Client Error'));
   redisClient.on('connect', () => logger.info('Redis Client Connected'));
 
