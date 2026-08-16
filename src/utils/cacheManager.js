@@ -14,10 +14,10 @@ let redisClient;
  * Initializes the Redis client connection.
  */
 async function init() {
-  console.log(`trying to connect to redis at ${process.env.REDIS_URL}`);
   redisClient = createClient({
     url: process.env.REDIS_URL
   });
+
   redisClient.on('error', (err) => logger.error({ err }, 'Redis Client Error'));
   redisClient.on('connect', () => logger.info('Redis Client Connected'));
 
@@ -35,7 +35,12 @@ async function get(key) {
     const value = await redisClient.get(key);
     if (value) {
       logger.info({ cacheKey: key, hit: true }, `Cache hit for key '${key}'`);
-      return JSON.parse(value);
+      return JSON.parse(value, (k, v) => {
+        if (v !== null && typeof v === 'object' && v.type === 'Buffer' && Array.isArray(v.data)) {
+          return Buffer.from(v.data);
+        }
+        return v;
+      });
     } else {
       logger.info({ cacheKey: key, hit: false }, `Cache miss for key '${key}'`);
       return null;
