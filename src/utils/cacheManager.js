@@ -15,9 +15,9 @@ let redisClient;
  */
 async function init() {
   redisClient = createClient({
-    url: process.env.REDIS_URL || 'localhost:6379'
+    url: process.env.REDIS_URL
   });
-
+  console.log(`trying to connect to redis at ${process.env.REDIS_URL}`);
   redisClient.on('error', (err) => logger.error({ err }, 'Redis Client Error'));
   redisClient.on('connect', () => logger.info('Redis Client Connected'));
 
