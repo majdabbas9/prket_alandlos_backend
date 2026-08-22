@@ -5,6 +5,8 @@ const KEYS = {
   HOMEPAGE_IMAGE: 'homepage_image',
   LOGO_IMAGE: 'logo_image',
   STORE_INFO: 'store_info',
+  STORE_INFO_AR: 'store_info_ar',
+  STORE_INFO_HE: 'store_info_he',
   PRODUCTS: 'products'
 };
 

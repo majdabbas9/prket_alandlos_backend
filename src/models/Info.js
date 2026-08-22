@@ -8,8 +8,10 @@ class Info {
    * @param {Object} [data={}] - Initial store info data
    */
   constructor(data = {}) {
-    const defaults = Info.getDefaults();
+    const defaults = this.constructor.getDefaults();
     const merged = { ...defaults, ...data };
+
+    this.lang = merged.lang !== undefined ? String(merged.lang) : defaults.lang;
 
     this.showPrice = typeof merged.showPrice === 'boolean'
       ? merged.showPrice
@@ -36,33 +38,11 @@ class Info {
 
   /**
    * Returns default values for store information.
+   * Abstract method - must be overridden by language-specific subclasses.
    * @returns {Object} Default store info structure
    */
   static getDefaults() {
-    return {
-      showPrice: false,
-      storeOpeningTime: "Sunday — Friday 10:00 AM — 6:00 PM",
-      email: "majd.abbas2024@gmail.com",
-      phone: "053-3919190",
-      whatsappLink: "wa.me/+972533919190",
-      location: "Alandlos Parquet Kafr Kanna",
-      description: "Alandlos Parquet Kafr Kanna",
-      showroomEyebrow: "visit our showroom",
-      showroomTitle: "parking slot!",
-      showroomDescription: "hi",
-      contactEyebrow: "hi",
-      contactTitle: "hi",
-      contactDescription: "hi",
-      heroEyebrow: "hi1",
-      heroTitle: "hi1",
-      heroDescription: "hi1",
-      stats: [
-        { value: "40+", label: "Years of Craft" },
-        { value: "1,200+", label: "Floors Installed" },
-        { value: "9", label: "Wood Collections" },
-        { value: "4.9", label: "Average Rating" }
-      ]
-    };
+    throw new Error('Info is abstract; use EnglishInfo, ArabicInfo, or HebrewInfo');
   }
 
   /**
@@ -103,6 +83,7 @@ class Info {
    */
   toJSON() {
     const obj = {
+      lang: this.lang,
       showPrice: this.showPrice,
       storeOpeningTime: this.storeOpeningTime,
       email: this.email,
@@ -133,20 +114,20 @@ class Info {
    */
   static fromJSON(input) {
     if (!input) {
-      logger.info('fromJSON called with empty input, returning default Info instance');
-      return new Info();
+      logger.info('fromJSON called with empty input, returning default instance');
+      return new this();
     }
     if (typeof input === 'string') {
       try {
         const parsed = JSON.parse(input);
         logger.info('Successfully parsed Info JSON string');
-        return new Info(parsed);
+        return new this(parsed);
       } catch (e) {
-        logger.error({ err: e }, 'Failed to parse Info JSON string, falling back to default Info instance');
-        return new Info();
+        logger.error({ err: e }, 'Failed to parse Info JSON string, falling back to default instance');
+        return new this();
       }
     }
-    return new Info(input);
+    return new this(input);
   }
 }
 
