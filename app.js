@@ -16,7 +16,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     logger.info(
       { method: req.method, url: req.originalUrl, status: res.statusCode, durationMs: duration },
-      `HTTP ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`
+      `HTTP ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`,
     );
   });
   next();
@@ -35,7 +35,7 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     service: 'Prket Alandlos Backend API (Node.js)',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -48,35 +48,37 @@ app.use('/api/info', infoRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {
-  logger.warn({ method: req.method, url: req.originalUrl }, `Route not found: ${req.method} ${req.originalUrl}`);
+  logger.warn(
+    { method: req.method, url: req.originalUrl },
+    `Route not found: ${req.method} ${req.originalUrl}`,
+  );
   res.status(404).json({
     success: false,
-    error: 'Endpoint not found'
+    error: 'Endpoint not found',
   });
 });
 
 // Global Error Handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   if (err && (err.name === 'MulterError' || err.code === 'LIMIT_UNEXPECTED_FILE')) {
     logger.warn(
       { err, method: req.method, url: req.originalUrl, field: err.field },
-      `Multer upload error on ${req.method} ${req.originalUrl}: ${err.message}`
+      `Multer upload error on ${req.method} ${req.originalUrl}: ${err.message}`,
     );
     return res.status(400).json({
       success: false,
-      error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`
+      error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`,
     });
   }
 
   logger.error(
     { err, method: req.method, url: req.originalUrl, status: err.status || 500 },
-    `Unhandled Server Error on ${req.method} ${req.originalUrl}: ${err.message}`
+    `Unhandled Server Error on ${req.method} ${req.originalUrl}: ${err.message}`,
   );
   res.status(err.status || 500).json({
     success: false,
-    error: err.message || 'Internal Server Error'
+    error: err.message || 'Internal Server Error',
   });
 });
 
 module.exports = app;
-

@@ -1,9 +1,16 @@
-const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} = require('@aws-sdk/client-s3');
 const logger = require('../utils/logger').getLogger(__filename);
 
 // Cloudflare R2 configurations
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
-const ENDPOINT = process.env.R2_ENDPOINT || 'https://bdea2f34b203a609c98be2413d4f8aaa.r2.cloudflarestorage.com';
+const ENDPOINT =
+  process.env.R2_ENDPOINT || 'https://bdea2f34b203a609c98be2413d4f8aaa.r2.cloudflarestorage.com';
 
 const accessKeyId = process.env.ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
 const secretAccessKey = process.env.SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
@@ -30,7 +37,10 @@ async function getObject(key, bucketName = BUCKET_NAME) {
       Key: key,
     });
     const result = await s3Client.send(command);
-    logger.info({ bucket: bucketName, key, contentType: result.ContentType }, 'Successfully fetched R2 object');
+    logger.info(
+      { bucket: bucketName, key, contentType: result.ContentType },
+      'Successfully fetched R2 object',
+    );
     return result;
   } catch (error) {
     logger.error({ err: error, bucket: bucketName, key }, 'Error fetching object from R2');
@@ -39,8 +49,11 @@ async function getObject(key, bucketName = BUCKET_NAME) {
 }
 
 async function putObject(key, body, contentType, bucketName = BUCKET_NAME) {
-  const bodySize = Buffer.isBuffer(body) ? body.length : (body ? body.length : null);
-  logger.info({ bucket: bucketName, key, contentType, sizeBytes: bodySize }, 'Uploading object to R2');
+  const bodySize = Buffer.isBuffer(body) ? body.length : body ? body.length : null;
+  logger.info(
+    { bucket: bucketName, key, contentType, sizeBytes: bodySize },
+    'Uploading object to R2',
+  );
   try {
     const command = new PutObjectCommand({
       Bucket: bucketName,
@@ -84,7 +97,11 @@ async function ObjectExists(key, bucketName = BUCKET_NAME) {
     logger.info({ bucket: bucketName, key, exists: true }, 'R2 object exists');
     return true;
   } catch (error) {
-    if (error.name === 'NotFound' || error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+    if (
+      error.name === 'NotFound' ||
+      error.name === 'NoSuchKey' ||
+      error.$metadata?.httpStatusCode === 404
+    ) {
       logger.info({ bucket: bucketName, key, exists: false }, 'R2 object does not exist');
       return false;
     }
@@ -97,7 +114,5 @@ module.exports = {
   getObject,
   putObject,
   deleteObject,
-  ObjectExists
+  ObjectExists,
 };
-
-

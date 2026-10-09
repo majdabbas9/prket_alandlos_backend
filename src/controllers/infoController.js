@@ -17,7 +17,10 @@ const saveInfoData = async (infoInstance, lang = 'en') => {
     const jsonString = JSON.stringify(dataToSave, null, 2);
     const buffer = Buffer.from(jsonString, 'utf8');
 
-    logger.info({ bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: buffer.length }, 'Pushing store info data to R2');
+    logger.info(
+      { bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: buffer.length },
+      'Pushing store info data to R2',
+    );
     await R2.putObject(entry.r2Key, buffer, 'application/json', BUCKET_NAME);
     logger.info({ bucket: BUCKET_NAME, key: entry.r2Key }, 'Successfully pushed info data to R2');
 
@@ -41,7 +44,10 @@ const readInfoData = async (lang = 'en') => {
     }
 
     if (!(await R2.ObjectExists(entry.r2Key, BUCKET_NAME))) {
-      logger.info({ bucket: BUCKET_NAME, key: entry.r2Key }, 'info key not found creating a new default one');
+      logger.info(
+        { bucket: BUCKET_NAME, key: entry.r2Key },
+        'info key not found creating a new default one',
+      );
       const defaultInfo = new entry.InfoClass();
       await saveInfoData(defaultInfo, lang);
       return defaultInfo;
@@ -52,7 +58,10 @@ const readInfoData = async (lang = 'en') => {
       chunks.push(chunk);
     }
     const content = Buffer.concat(chunks).toString('utf8');
-    logger.info({ bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: content.length }, 'Successfully retrieved info data from R2');
+    logger.info(
+      { bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: content.length },
+      'Successfully retrieved info data from R2',
+    );
 
     const infoObj = entry.InfoClass.fromJSON(content);
     await cacheManager.set(entry.cacheKey, infoObj);
@@ -82,7 +91,10 @@ const propagateSharedFields = async (updatedInfo, updateData, targetLang) => {
       await saveInfoData(info, lang);
       logger.info({ lang, sharedUpdates }, 'Propagated shared fields to language');
     } catch (error) {
-      logger.error({ err: error, lang, sharedUpdates }, 'Failed to propagate shared fields to language');
+      logger.error(
+        { err: error, lang, sharedUpdates },
+        'Failed to propagate shared fields to language',
+      );
     }
   }
 };
@@ -93,13 +105,13 @@ exports.getInfo = async (req, res) => {
   if (!isSupportedLang(req.lang)) {
     return res.status(400).json({
       success: false,
-      error: `Unsupported language "${req.lang}". Supported: ${SUPPORTED_LANGS.join(', ')}`
+      error: `Unsupported language "${req.lang}". Supported: ${SUPPORTED_LANGS.join(', ')}`,
     });
   }
   const infoObj = await readInfoData(req.lang);
   return res.status(200).json({
     success: true,
-    data: infoObj.toJSON()
+    data: infoObj.toJSON(),
   });
 };
 
@@ -110,7 +122,7 @@ exports.updateInfo = async (req, res) => {
     if (!isSupportedLang(req.lang)) {
       return res.status(400).json({
         success: false,
-        error: `Unsupported language "${req.lang}". Supported: ${SUPPORTED_LANGS.join(', ')}`
+        error: `Unsupported language "${req.lang}". Supported: ${SUPPORTED_LANGS.join(', ')}`,
       });
     }
     const currentInfo = await readInfoData(req.lang);
@@ -121,23 +133,26 @@ exports.updateInfo = async (req, res) => {
       logger.warn('Failed to save updated store info to R2');
       return res.status(500).json({
         success: false,
-        error: 'Failed to write updated info data'
+        error: 'Failed to write updated info data',
       });
     }
 
     await propagateSharedFields(currentInfo, req.body, req.lang);
 
-    logger.info({ data: currentInfo.toJSON() }, 'POST /api/info - Store information updated successfully');
+    logger.info(
+      { data: currentInfo.toJSON() },
+      'POST /api/info - Store information updated successfully',
+    );
     return res.status(200).json({
       success: true,
       message: 'Store information updated successfully',
-      data: currentInfo.toJSON()
+      data: currentInfo.toJSON(),
     });
   } catch (error) {
     logger.error({ err: error }, 'Error updating store information');
     return res.status(500).json({
       success: false,
-      error: 'Failed to update store information: ' + error.message
+      error: 'Failed to update store information: ' + error.message,
     });
   }
 };

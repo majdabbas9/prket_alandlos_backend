@@ -3,14 +3,17 @@ const path = require('path');
 
 const baseLogger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test' ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-      ignore: 'pid,hostname'
-    }
-  } : undefined
+  transport:
+    process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
+            ignore: 'pid,hostname',
+          },
+        }
+      : undefined,
 });
 
 /**
@@ -35,4 +38,3 @@ baseLogger.createLogger = getLogger;
 module.exports = baseLogger;
 module.exports.getLogger = getLogger;
 module.exports.createLogger = getLogger;
-

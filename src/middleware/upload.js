@@ -17,9 +17,12 @@ const storage = multer.diskStorage({
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname).toLowerCase();
     const generatedFilename = `img-${uniqueSuffix}${ext}`;
-    logger.info({ originalname: file.originalname, generatedFilename }, 'Generated temporary upload filename');
+    logger.info(
+      { originalname: file.originalname, generatedFilename },
+      'Generated temporary upload filename',
+    );
     cb(null, generatedFilename);
-  }
+  },
 });
 
 const fileFilter = (req, file, cb) => {
@@ -28,18 +31,24 @@ const fileFilter = (req, file, cb) => {
   const mimeType = allowedTypes.test(file.mimetype);
 
   if (extName && mimeType) {
-    logger.info({ originalname: file.originalname, mimetype: file.mimetype }, 'File upload validation passed');
+    logger.info(
+      { originalname: file.originalname, mimetype: file.mimetype },
+      'File upload validation passed',
+    );
     return cb(null, true);
   }
 
-  logger.warn({ originalname: file.originalname, mimetype: file.mimetype }, 'File upload rejected: invalid file type');
+  logger.warn(
+    { originalname: file.originalname, mimetype: file.mimetype },
+    'File upload rejected: invalid file type',
+  );
   cb(new Error('Only image files (jpg, jpeg, png, gif, webp, svg, avif) are allowed!'));
 };
 
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter
+  fileFilter,
 });
 
 const defaultAllowedFields = ['image', 'file', 'photo', 'picture', 'logo'];
@@ -60,7 +69,7 @@ upload.flexibleSingle = (fields = defaultAllowedFields) => {
           logger.warn({ err, field: err.field }, `Multer upload error: ${err.message}`);
           return res.status(400).json({
             success: false,
-            error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`
+            error: `File upload error: ${err.message}${err.field ? ` (field: '${err.field}')` : ''}`,
           });
         }
         return next(err);
@@ -80,5 +89,3 @@ upload.flexibleSingle = (fields = defaultAllowedFields) => {
 };
 
 module.exports = upload;
-
-

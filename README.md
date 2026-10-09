@@ -17,14 +17,17 @@ A full-featured, robust Node.js & Express RESTful API for **Prket Alandlos**, su
 ## 🚀 Getting Started
 
 ### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Environment & Configuration
+
 By default, the server runs on port **`5000`** (or respects the `PORT` environment variable).
 
 ### 3. Start the Server
+
 - **Development Mode** (with Nodemon):
   ```bash
   npm run dev
@@ -40,21 +43,22 @@ Default Base URL: `http://localhost:5000`
 
 ## 📋 API Overview Table
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/health` | Service health status and timestamp |
-| `GET` | `/api/products` | Retrieve products (supports search, category, sort, pagination) |
-| `GET` | `/api/products/:id` | Retrieve single product by unique ID |
-| `POST` | `/api/products` | Create a new product (JSON or file upload via `image` field) |
-| `PUT` | `/api/products/:id` | Update an existing product by ID |
-| `DELETE` | `/api/products/:id` | Delete product and remove associated uploaded image file |
-| `GET` | `/api/products/photo` | Proxy remote image stream or stream local uploaded image file |
+| Method   | Endpoint              | Description                                                     |
+| -------- | --------------------- | --------------------------------------------------------------- |
+| `GET`    | `/api/health`         | Service health status and timestamp                             |
+| `GET`    | `/api/products`       | Retrieve products (supports search, category, sort, pagination) |
+| `GET`    | `/api/products/:id`   | Retrieve single product by unique ID                            |
+| `POST`   | `/api/products`       | Create a new product (JSON or file upload via `image` field)    |
+| `PUT`    | `/api/products/:id`   | Update an existing product by ID                                |
+| `DELETE` | `/api/products/:id`   | Delete product and remove associated uploaded image file        |
+| `GET`    | `/api/products/photo` | Proxy remote image stream or stream local uploaded image file   |
 
 ---
 
 ## 📖 Detailed Endpoint Documentation
 
 ### 1. Health Check
+
 Checks if the backend API is up and running.
 
 - **Method**: `GET`
@@ -62,6 +66,7 @@ Checks if the backend API is up and running.
 - **Headers**: None
 
 #### Success Response (`200 OK`)
+
 ```json
 {
   "status": "ok",
@@ -73,21 +78,23 @@ Checks if the backend API is up and running.
 ---
 
 ### 2. Get All Products
+
 Retrieves products stored in the database. Supports searching, category filtering, custom sorting, and pagination.
 
 - **Method**: `GET`
 - **URL**: `/api/products`
 - **Query Parameters**:
 
-| Parameter | Type | Required | Description | Example |
-|---|---|---|---|---|
-| `search` | `string` | No | Search query matching product title, description, or category (case-insensitive) | `?search=oak` |
-| `category` | `string` | No | Filter products by exact category (case-insensitive) | `?category=Parquet` |
-| `sort` | `string` | No | Sort order. Options: `newest` *(default)*, `oldest`, `price_asc`, `price_desc` | `?sort=price_asc` |
-| `page` | `integer` | No | Page number for pagination (must be paired with `limit`) | `?page=1` |
-| `limit` | `integer` | No | Number of items per page | `?limit=10` |
+| Parameter  | Type      | Required | Description                                                                      | Example             |
+| ---------- | --------- | -------- | -------------------------------------------------------------------------------- | ------------------- |
+| `search`   | `string`  | No       | Search query matching product title, description, or category (case-insensitive) | `?search=oak`       |
+| `category` | `string`  | No       | Filter products by exact category (case-insensitive)                             | `?category=Parquet` |
+| `sort`     | `string`  | No       | Sort order. Options: `newest` _(default)_, `oldest`, `price_asc`, `price_desc`   | `?sort=price_asc`   |
+| `page`     | `integer` | No       | Page number for pagination (must be paired with `limit`)                         | `?page=1`           |
+| `limit`    | `integer` | No       | Number of items per page                                                         | `?limit=10`         |
 
 #### Standard Response (`200 OK` without pagination)
+
 ```json
 {
   "success": true,
@@ -96,7 +103,7 @@ Retrieves products stored in the database. Supports searching, category filterin
     {
       "id": "prod_1",
       "title": "Oak Parquet Classic",
-      "price": 45.00,
+      "price": 45.0,
       "category": "Parquet",
       "description": "High quality natural oak parquet flooring",
       "imageUrl": "/uploads/1722510000000-oak.jpg",
@@ -107,6 +114,7 @@ Retrieves products stored in the database. Supports searching, category filterin
 ```
 
 #### Paginated Response (`200 OK` when `page` and `limit` are passed)
+
 ```json
 {
   "success": true,
@@ -121,6 +129,7 @@ Retrieves products stored in the database. Supports searching, category filterin
 ---
 
 ### 3. Get Product by ID
+
 Retrieves details of a single product using its unique identifier.
 
 - **Method**: `GET`
@@ -129,6 +138,7 @@ Retrieves details of a single product using its unique identifier.
   - `id` (`string`, required): Unique product identifier (e.g. `prod_123456`).
 
 #### Success Response (`200 OK`)
+
 ```json
 {
   "success": true,
@@ -145,6 +155,7 @@ Retrieves details of a single product using its unique identifier.
 ```
 
 #### Error Response (`404 Not Found`)
+
 ```json
 {
   "success": false,
@@ -155,6 +166,7 @@ Retrieves details of a single product using its unique identifier.
 ---
 
 ### 4. Create Product
+
 Creates a new product record. Supports both JSON payload (with `imageUrl`) and `multipart/form-data` payload for uploading an image file directly.
 
 - **Method**: `POST`
@@ -165,20 +177,21 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
 
 #### Request Body Fields
 
-| Field Name | Type | Required | Description |
-|---|---|---|---|
-| `title` | `string` | No (default: `"Untitled Product"`) | Product title |
-| `price` | `number` | No (default: `0`) | Price per unit |
-| `category` | `string` | No (default: `"General"`) | Category name |
-| `description` | `string` | No (default: `""`) | Product description |
-| `imageUrl` | `string` | **Required if no file uploaded** | Valid image URL string |
-| `image` | `file` | **Required if no `imageUrl` provided** | Image file attachment (`.jpg`, `.png`, `.webp`, `.svg`, etc.) |
+| Field Name    | Type     | Required                               | Description                                                   |
+| ------------- | -------- | -------------------------------------- | ------------------------------------------------------------- |
+| `title`       | `string` | No (default: `"Untitled Product"`)     | Product title                                                 |
+| `price`       | `number` | No (default: `0`)                      | Price per unit                                                |
+| `category`    | `string` | No (default: `"General"`)              | Category name                                                 |
+| `description` | `string` | No (default: `""`)                     | Product description                                           |
+| `imageUrl`    | `string` | **Required if no file uploaded**       | Valid image URL string                                        |
+| `image`       | `file`   | **Required if no `imageUrl` provided** | Image file attachment (`.jpg`, `.png`, `.webp`, `.svg`, etc.) |
 
 #### Example A: JSON Payload
+
 ```json
 {
   "title": "Solid Walnut Flooring",
-  "price": 64.50,
+  "price": 64.5,
   "category": "Parquet",
   "description": "Durable dark walnut wood planks",
   "imageUrl": "https://images.unsplash.com/photo-1513694203232-719a280e022f"
@@ -186,6 +199,7 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
 ```
 
 #### Example B: Multipart Form-Data (Postman / cURL)
+
 - Key `image` (File): `[ Select image file ]`
 - Key `title` (Text): `Solid Walnut Flooring`
 - Key `price` (Text): `64.50`
@@ -193,6 +207,7 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
 - Key `description` (Text): `Durable dark walnut wood planks`
 
 #### Success Response (`201 Created`)
+
 ```json
 {
   "success": true,
@@ -200,7 +215,7 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
   "data": {
     "id": "prod_a1b2c3d4-e5f6-7890",
     "title": "Solid Walnut Flooring",
-    "price": 64.50,
+    "price": 64.5,
     "category": "Parquet",
     "description": "Durable dark walnut wood planks",
     "imageUrl": "/uploads/1722510500000-walnut.jpg",
@@ -210,6 +225,7 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
 ```
 
 #### Error Response (`400 Bad Request`)
+
 ```json
 {
   "success": false,
@@ -220,6 +236,7 @@ Creates a new product record. Supports both JSON payload (with `imageUrl`) and `
 ---
 
 ### 5. Update Product
+
 Updates fields of an existing product by ID. Supports JSON body or file upload (`multipart/form-data`).
 
 - **Method**: `PUT`
@@ -229,6 +246,7 @@ Updates fields of an existing product by ID. Supports JSON body or file upload (
 - **Headers**: `Content-Type: application/json` OR `Content-Type: multipart/form-data`
 
 #### Request Body (JSON Example)
+
 ```json
 {
   "title": "Updated Walnut Flooring",
@@ -237,6 +255,7 @@ Updates fields of an existing product by ID. Supports JSON body or file upload (
 ```
 
 #### Success Response (`200 OK`)
+
 ```json
 {
   "success": true,
@@ -257,6 +276,7 @@ Updates fields of an existing product by ID. Supports JSON body or file upload (
 ---
 
 ### 6. Delete Product
+
 Deletes a product by ID. If the product references a locally uploaded file in `/uploads/`, the physical file is also automatically deleted from the server filesystem.
 
 - **Method**: `DELETE`
@@ -265,6 +285,7 @@ Deletes a product by ID. If the product references a locally uploaded file in `/
   - `id` (`string`, required): Unique product identifier.
 
 #### Success Response (`200 OK`)
+
 ```json
 {
   "success": true,
@@ -284,17 +305,19 @@ Deletes a product by ID. If the product references a locally uploaded file in `/
 ---
 
 ### 7. Proxy Photo Stream
+
 Streams a local uploaded image file or proxies a remote external image via HTTP buffer stream to prevent CORS issues on client applications.
 
 - **Method**: `GET`
 - **URL**: `/api/products/photo`
 - **Query Parameters**:
 
-| Parameter | Type | Required | Description | Example |
-|---|---|---|---|---|
-| `url` | `string` | **Yes** | Target local image path (`/uploads/...`) or external HTTP image URL | `/api/products/photo?url=/uploads/photo.jpg` |
+| Parameter | Type     | Required | Description                                                         | Example                                      |
+| --------- | -------- | -------- | ------------------------------------------------------------------- | -------------------------------------------- |
+| `url`     | `string` | **Yes**  | Target local image path (`/uploads/...`) or external HTTP image URL | `/api/products/photo?url=/uploads/photo.jpg` |
 
 #### Success Response (`200 OK`)
+
 - **Headers**:
   - `Content-Type`: `image/jpeg` (or appropriate MIME type)
   - `Cache-Control`: `public, max-age=86400`
@@ -327,6 +350,7 @@ backend/
 ## 🧪 Testing
 
 Run test suite:
+
 ```bash
 npm test
 ```

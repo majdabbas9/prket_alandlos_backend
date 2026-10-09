@@ -7,7 +7,8 @@ const cacheManager = require('../utils/cacheManager');
 
 const LOGO_KEY = 'logo/logoImage';
 const LOCAL_LOGO_PATH = path.join(__dirname, '../../uploads/logo/12.jpg');
-const DEFAULT_PARKET_LOGO_URL = 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=800&auto=format&fit=crop';
+const DEFAULT_PARKET_LOGO_URL =
+  'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=800&auto=format&fit=crop';
 
 /**
  * Class representing Logo image model and logic.
@@ -35,24 +36,26 @@ class Logo {
    * @returns {Object}
    */
   static getDefaults() {
-    return (process.env.NODE_ENV === 'test') ? {
-      key: LOGO_KEY,
-      width: 800,
-      height: 800,
-      mimeType: 'image/jpeg',
-      logoUrl: '/uploads/logo/12.jpg',
-      filename: '12.jpg',
-      updatedAt: new Date().toISOString()
-    } : {
-      key: LOGO_KEY,
-      width: 800,
-      height: 800,
-      mimeType: 'image/jpeg',
-      size: 13300,
-      logoUrl: '/uploads/logo/12.jpg',
-      filename: '12.jpg',
-      updatedAt: '2026-08-01T13:19:03.175Z'
-    };
+    return process.env.NODE_ENV === 'test'
+      ? {
+          key: LOGO_KEY,
+          width: 800,
+          height: 800,
+          mimeType: 'image/jpeg',
+          logoUrl: '/uploads/logo/12.jpg',
+          filename: '12.jpg',
+          updatedAt: new Date().toISOString(),
+        }
+      : {
+          key: LOGO_KEY,
+          width: 800,
+          height: 800,
+          mimeType: 'image/jpeg',
+          size: 13300,
+          logoUrl: '/uploads/logo/12.jpg',
+          filename: '12.jpg',
+          updatedAt: '2026-08-01T13:19:03.175Z',
+        };
   }
 
   /**
@@ -71,15 +74,24 @@ class Logo {
     }
 
     if (!imageBuffer) {
-      logger.info({ url: DEFAULT_PARKET_LOGO_URL }, 'Downloading default parket logo image from internet URL');
+      logger.info(
+        { url: DEFAULT_PARKET_LOGO_URL },
+        'Downloading default parket logo image from internet URL',
+      );
       try {
         const response = await fetch(DEFAULT_PARKET_LOGO_URL);
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
           imageBuffer = Buffer.from(arrayBuffer);
-          logger.info({ sizeBytes: imageBuffer.length }, 'Successfully downloaded default parket logo image');
+          logger.info(
+            { sizeBytes: imageBuffer.length },
+            'Successfully downloaded default parket logo image',
+          );
         } else {
-          logger.warn({ status: response.status }, 'Failed to fetch default parket logo image from internet URL');
+          logger.warn(
+            { status: response.status },
+            'Failed to fetch default parket logo image from internet URL',
+          );
         }
       } catch (fetchErr) {
         logger.error({ err: fetchErr }, 'Error fetching parket logo image from internet');
@@ -93,15 +105,14 @@ class Logo {
           width: 800,
           height: 800,
           channels: 4,
-          background: { r: 184, g: 115, b: 51, alpha: 1 }
-        }
-      }).jpeg().toBuffer();
+          background: { r: 184, g: 115, b: 51, alpha: 1 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
     }
 
-    let sharpPipeline = sharp(imageBuffer).rotate();
-    const meta = await sharp(imageBuffer).metadata();
-
-    const processedBuffer = await sharpPipeline.toBuffer();
+    const processedBuffer = await sharp(imageBuffer).rotate().toBuffer();
     const processedMeta = await sharp(processedBuffer).metadata();
 
     return {
@@ -109,7 +120,7 @@ class Logo {
       width: processedMeta.width || 800,
       height: processedMeta.height || 800,
       mimeType: `image/${processedMeta.format || 'jpeg'}`,
-      size: processedBuffer.length
+      size: processedBuffer.length,
     };
   }
 
@@ -132,7 +143,10 @@ class Logo {
     }
 
     if (!keyExists) {
-      logger.info({ key }, 'Logo image key not found on R2. Creating key with image from internet about parket logo');
+      logger.info(
+        { key },
+        'Logo image key not found on R2. Creating key with image from internet about parket logo',
+      );
       const defaultImg = await Logo.downloadOrGenerateParketLogoImage();
       await R2.putObject(key, defaultImg.buffer, defaultImg.mimeType);
 
@@ -142,15 +156,18 @@ class Logo {
         height: defaultImg.height,
         mimeType: defaultImg.mimeType,
         size: defaultImg.size,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
 
-      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
+      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, {
+        buffer: defaultImg.buffer,
+        contentType: defaultImg.mimeType,
+      });
 
       return {
         buffer: defaultImg.buffer,
         contentType: defaultImg.mimeType,
-        metadata: logoModel
+        metadata: logoModel,
       };
     }
 
@@ -175,19 +192,22 @@ class Logo {
       buffer = Buffer.concat(chunks);
 
       await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType });
-      logger.info({ key, contentType, sizeBytes: buffer.length }, 'Logo image retrieved from R2 and cached');
+      logger.info(
+        { key, contentType, sizeBytes: buffer.length },
+        'Logo image retrieved from R2 and cached',
+      );
     }
 
     const logoModel = new Logo({
       key,
       mimeType: contentType,
-      size: buffer.length
+      size: buffer.length,
     });
 
     return {
       buffer,
       contentType,
-      metadata: logoModel
+      metadata: logoModel,
     };
   }
 
@@ -216,14 +236,17 @@ class Logo {
 
     await R2.putObject(key, buffer, mimeType);
     await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType: mimeType });
-    logger.info({ key, width, height, mimeType, size }, 'Logo image processed and updated successfully');
+    logger.info(
+      { key, width, height, mimeType, size },
+      'Logo image processed and updated successfully',
+    );
     return new Logo({
       key,
       width,
       height,
       mimeType,
       size,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -240,7 +263,7 @@ class Logo {
       height: this.height,
       mimeType: this.mimeType,
       size: this.size,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 }

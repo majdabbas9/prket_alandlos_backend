@@ -10,8 +10,16 @@ const cacheManager = require('./cacheManager');
  */
 const LANGUAGES = {
   en: { InfoClass: EnglishInfo, r2Key: 'info/info.json', cacheKey: cacheManager.KEYS.STORE_INFO },
-  ar: { InfoClass: ArabicInfo, r2Key: 'info/info-ar.json', cacheKey: cacheManager.KEYS.STORE_INFO_AR },
-  he: { InfoClass: HebrewInfo, r2Key: 'info/info-he.json', cacheKey: cacheManager.KEYS.STORE_INFO_HE }
+  ar: {
+    InfoClass: ArabicInfo,
+    r2Key: 'info/info-ar.json',
+    cacheKey: cacheManager.KEYS.STORE_INFO_AR,
+  },
+  he: {
+    InfoClass: HebrewInfo,
+    r2Key: 'info/info-he.json',
+    cacheKey: cacheManager.KEYS.STORE_INFO_HE,
+  },
 };
 
 const SUPPORTED_LANGS = Object.keys(LANGUAGES);

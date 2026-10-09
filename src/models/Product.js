@@ -79,7 +79,7 @@ class Product {
       description: this.description,
       imageKey: this.imageKey,
       dateOfUpload: this.dateOfUpload,
-      ...(this.updatedAt && { updatedAt: this.updatedAt })
+      ...(this.updatedAt && { updatedAt: this.updatedAt }),
     };
   }
 }

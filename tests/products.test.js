@@ -14,7 +14,7 @@ jest.mock('../src/cloudManager/R2', () => {
     }
     throw new Error('NoSuchKey');
   });
-  const putObject = jest.fn(async (key, body, contentType) => {
+  const putObject = jest.fn(async (key, body) => {
     mockStorage.set(key, body);
     return { success: true };
   });
@@ -85,12 +85,10 @@ describe('Prket Alandlos Backend API Tests', () => {
         price: 99.99,
         category: 'Parquet',
         description: 'Created by automated test',
-        imageKey: 'products/test-image-key.jpeg'
+        imageKey: 'products/test-image-key.jpeg',
       };
 
-      const res = await request(app)
-        .post('/api/products')
-        .send(newProduct);
+      const res = await request(app).post('/api/products').send(newProduct);
 
       expect(res.statusCode).toEqual(201);
       expect(res.body.success).toBe(true);
@@ -127,9 +125,7 @@ describe('Prket Alandlos Backend API Tests', () => {
     });
 
     it('should fail with 400 when imageKey is missing', async () => {
-      const res = await request(app)
-        .post('/api/products')
-        .send({ title: 'No Image Product' });
+      const res = await request(app).post('/api/products').send({ title: 'No Image Product' });
 
       expect(res.statusCode).toEqual(400);
       expect(res.body.success).toBe(false);
@@ -147,11 +143,11 @@ describe('Prket Alandlos Backend API Tests', () => {
       expect(createdProductId).toBeDefined();
       const res = await request(app)
         .put(`/api/products/${createdProductId}`)
-        .send({ price: 120.00 });
+        .send({ price: 120.0 });
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.price).toBe(120.00);
+      expect(res.body.data.price).toBe(120.0);
     });
 
     it('should delete product by ID', async () => {

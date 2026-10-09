@@ -6,7 +6,7 @@ const { normalizeLang } = require('../utils/languages');
 
 // Resolve the lang field (GET query / POST body); empty or missing defaults to English
 const resolveLang = (req, res, next) => {
-  const raw = req.method === 'GET' ? req.query.lang : (req.body ? req.body.lang : undefined);
+  const raw = req.method === 'GET' ? req.query.lang : req.body ? req.body.lang : undefined;
   req.lang = normalizeLang(raw);
   next();
 };
