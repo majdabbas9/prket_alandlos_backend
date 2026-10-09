@@ -17,7 +17,7 @@ jest.mock('../src/cloudManager/R2', () => {
     }
     throw new Error('NoSuchKey');
   });
-  const putObject = jest.fn(async (key, body, contentType) => {
+  const putObject = jest.fn(async (key, body) => {
     mockStorage.set(key, body);
     return { success: true };
   });
@@ -56,8 +56,8 @@ describe('Logo API Endpoints (/api/logo)', () => {
         width: 400,
         height: 400,
         channels: 4,
-        background: { r: 50, g: 100, b: 200, alpha: 1 }
-      }
+        background: { r: 50, g: 100, b: 200, alpha: 1 },
+      },
     })
       .png()
       .toFile(testImagePath);
@@ -67,9 +67,11 @@ describe('Logo API Endpoints (/api/logo)', () => {
         width: 800,
         height: 800,
         channels: 4,
-        background: { r: 100, g: 150, b: 200, alpha: 1 }
-      }
-    }).png().toBuffer();
+        background: { r: 100, g: 150, b: 200, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
     mockStorage.set('logo/logoImage', dummyImageBuffer);
   });
 
@@ -126,9 +128,7 @@ describe('Logo API Endpoints (/api/logo)', () => {
   describe('POST /api/logo', () => {
     it('should update logo image with a valid logoUrl string', async () => {
       const newUrl = '/uploads/logo/12.jpg';
-      const res = await request(app)
-        .post('/api/logo')
-        .send({ logoUrl: newUrl });
+      const res = await request(app).post('/api/logo').send({ logoUrl: newUrl });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -136,9 +136,7 @@ describe('Logo API Endpoints (/api/logo)', () => {
     });
 
     it('should upload a new logo file and save it in R2 storage', async () => {
-      const res = await request(app)
-        .post('/api/logo')
-        .attach('logo', testImagePath);
+      const res = await request(app).post('/api/logo').attach('logo', testImagePath);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -150,9 +148,7 @@ describe('Logo API Endpoints (/api/logo)', () => {
     });
 
     it('should return 400 Bad Request when no image file or logoUrl is provided', async () => {
-      const res = await request(app)
-        .post('/api/logo')
-        .send({});
+      const res = await request(app).post('/api/logo').send({});
 
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);

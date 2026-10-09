@@ -4,7 +4,8 @@ const logger = require('../utils/logger').getLogger(__filename);
 const cacheManager = require('../utils/cacheManager');
 
 const HOMEPAGE_KEY = 'homePage/homepageImage';
-const DEFAULT_PARKET_IMAGE_URL = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1600&auto=format&fit=crop';
+const DEFAULT_PARKET_IMAGE_URL =
+  'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1600&auto=format&fit=crop';
 
 /**
  * Class representing Homepage Image model and logic.
@@ -30,20 +31,22 @@ class Homepage {
    * @returns {Object}
    */
   static getDefaults() {
-    return (process.env.NODE_ENV === 'test') ? {
-      key: HOMEPAGE_KEY,
-      width: 1600,
-      height: 1067,
-      mimeType: 'image/jpeg',
-      updatedAt: new Date().toISOString()
-    } : {
-      key: HOMEPAGE_KEY,
-      width: 1600,
-      height: 2133,
-      mimeType: 'image/jpeg',
-      size: 552398,
-      updatedAt: '2026-08-01T20:24:11.144Z'
-    };
+    return process.env.NODE_ENV === 'test'
+      ? {
+          key: HOMEPAGE_KEY,
+          width: 1600,
+          height: 1067,
+          mimeType: 'image/jpeg',
+          updatedAt: new Date().toISOString(),
+        }
+      : {
+          key: HOMEPAGE_KEY,
+          width: 1600,
+          height: 2133,
+          mimeType: 'image/jpeg',
+          size: 552398,
+          updatedAt: '2026-08-01T20:24:11.144Z',
+        };
   }
 
   /**
@@ -51,16 +54,25 @@ class Homepage {
    * @returns {Promise<{buffer: Buffer, width: number, height: number, mimeType: string, size: number}>}
    */
   static async downloadOrGenerateParketImage() {
-    logger.info({ url: DEFAULT_PARKET_IMAGE_URL }, 'Downloading default parket image from internet URL');
+    logger.info(
+      { url: DEFAULT_PARKET_IMAGE_URL },
+      'Downloading default parket image from internet URL',
+    );
     let imageBuffer = null;
     try {
       const response = await fetch(DEFAULT_PARKET_IMAGE_URL);
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer();
         imageBuffer = Buffer.from(arrayBuffer);
-        logger.info({ sizeBytes: imageBuffer.length }, 'Successfully downloaded default parket image');
+        logger.info(
+          { sizeBytes: imageBuffer.length },
+          'Successfully downloaded default parket image',
+        );
       } else {
-        logger.warn({ status: response.status }, 'Failed to fetch default parket image from internet URL');
+        logger.warn(
+          { status: response.status },
+          'Failed to fetch default parket image from internet URL',
+        );
       }
     } catch (fetchErr) {
       logger.error({ err: fetchErr }, 'Error fetching parket image from internet');
@@ -73,16 +85,21 @@ class Homepage {
           width: 1600,
           height: 1067,
           channels: 4,
-          background: { r: 160, g: 82, b: 45, alpha: 1 }
-        }
-      }).jpeg().toBuffer();
+          background: { r: 160, g: 82, b: 45, alpha: 1 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
     }
 
     let sharpPipeline = sharp(imageBuffer).rotate();
     const meta = await sharp(imageBuffer).metadata();
 
     if (meta.width && meta.width !== 1600) {
-      logger.info({ originalWidth: meta.width, targetWidth: 1600 }, 'Resizing parket image to standard target width 1600');
+      logger.info(
+        { originalWidth: meta.width, targetWidth: 1600 },
+        'Resizing parket image to standard target width 1600',
+      );
       sharpPipeline = sharpPipeline.resize({ width: 1600, withoutEnlargement: false });
     }
 
@@ -94,7 +111,7 @@ class Homepage {
       width: processedMeta.width || 1600,
       height: processedMeta.height || 1067,
       mimeType: `image/${processedMeta.format || 'jpeg'}`,
-      size: processedBuffer.length
+      size: processedBuffer.length,
     };
   }
 
@@ -117,7 +134,10 @@ class Homepage {
     }
 
     if (!keyExists) {
-      logger.info({ key }, 'Homepage image key not found on R2. Creating key with image from internet about parket');
+      logger.info(
+        { key },
+        'Homepage image key not found on R2. Creating key with image from internet about parket',
+      );
       const defaultImg = await Homepage.downloadOrGenerateParketImage();
       await R2.putObject(key, defaultImg.buffer, defaultImg.mimeType);
 
@@ -127,15 +147,18 @@ class Homepage {
         height: defaultImg.height,
         mimeType: defaultImg.mimeType,
         size: defaultImg.size,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
 
-      await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer: defaultImg.buffer, contentType: defaultImg.mimeType });
+      await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, {
+        buffer: defaultImg.buffer,
+        contentType: defaultImg.mimeType,
+      });
 
       return {
         buffer: defaultImg.buffer,
         contentType: defaultImg.mimeType,
-        metadata: homepageModel
+        metadata: homepageModel,
       };
     }
 
@@ -160,19 +183,22 @@ class Homepage {
       buffer = Buffer.concat(chunks);
 
       await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType });
-      logger.info({ key, contentType, sizeBytes: buffer.length }, 'Homepage image retrieved from R2 and cached');
+      logger.info(
+        { key, contentType, sizeBytes: buffer.length },
+        'Homepage image retrieved from R2 and cached',
+      );
     }
 
     const homepageModel = new Homepage({
       key,
       mimeType: contentType,
-      size: buffer.length
+      size: buffer.length,
     });
 
     return {
       buffer,
       contentType,
-      metadata: homepageModel
+      metadata: homepageModel,
     };
   }
 
@@ -196,7 +222,7 @@ class Homepage {
       logger.info({ origWidth, TARGET_WIDTH }, 'Resizing uploaded image to target width 1600');
       sharpPipeline = sharpPipeline.resize({
         width: TARGET_WIDTH,
-        withoutEnlargement: false
+        withoutEnlargement: false,
       });
     }
 
@@ -210,14 +236,17 @@ class Homepage {
 
     await R2.putObject(key, buffer, mimeType);
     await cacheManager.set(cacheManager.KEYS.HOMEPAGE_IMAGE, { buffer, contentType: mimeType });
-    logger.info({ key, width, height, mimeType, size }, 'Homepage image processed and updated successfully');
+    logger.info(
+      { key, width, height, mimeType, size },
+      'Homepage image processed and updated successfully',
+    );
     return new Homepage({
       key,
       width,
       height,
       mimeType,
       size,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -232,10 +261,9 @@ class Homepage {
       height: this.height,
       mimeType: this.mimeType,
       size: this.size,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
     };
   }
 }
 
 module.exports = Homepage;
-

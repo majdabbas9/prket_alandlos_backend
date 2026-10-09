@@ -16,7 +16,7 @@ jest.mock('../src/utils/cacheManager', () => {
       STORE_INFO: 'store_info',
       STORE_INFO_AR: 'store_info_ar',
       STORE_INFO_HE: 'store_info_he',
-      PRODUCTS: 'products'
+      PRODUCTS: 'products',
     },
     init: jest.fn().mockResolvedValue(),
     get: jest.fn(async (key) => {
@@ -30,7 +30,7 @@ jest.mock('../src/utils/cacheManager', () => {
       if (key) mockCache.delete(key);
       else mockCache.clear();
     }),
-    has: jest.fn(async (key) => mockCache.has(key))
+    has: jest.fn(async (key) => mockCache.has(key)),
   };
 });
 
@@ -40,7 +40,7 @@ jest.mock('../src/cloudManager/R2', () => {
     const storageKey = `${bucketName}:${key}`;
     if (mockStorage.has(storageKey)) {
       return {
-        Body: [Buffer.from(mockStorage.get(storageKey), 'utf8')]
+        Body: [Buffer.from(mockStorage.get(storageKey), 'utf8')],
       };
     }
     throw new Error('NoSuchKey');
@@ -102,7 +102,7 @@ describe('Info Model & API Endpoints', () => {
       const custom = {
         email: 'custom@example.com',
         phone: '+123456789',
-        showPrice: false
+        showPrice: false,
       };
       const info = new EnglishInfo(custom);
 
@@ -116,7 +116,7 @@ describe('Info Model & API Endpoints', () => {
       info.update({
         email: 'updated@example.com',
         showPrice: 'false',
-        contactTitle: 'New Contact Title'
+        contactTitle: 'New Contact Title',
       });
 
       expect(info.email).toBe('updated@example.com');
@@ -292,12 +292,10 @@ describe('Info Model & API Endpoints', () => {
       const updatePayload = {
         email: 'newemail@prket.com',
         showPrice: false,
-        location: 'New Location'
+        location: 'New Location',
       };
 
-      const res = await request(app)
-        .post('/api/info')
-        .send(updatePayload);
+      const res = await request(app).post('/api/info').send(updatePayload);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -347,9 +345,7 @@ describe('Info Model & API Endpoints', () => {
     });
 
     test('updates the Hebrew doc and propagates shared phone to other languages', async () => {
-      const res = await request(app)
-        .post('/api/info')
-        .send({ lang: 'he', phone: '055-1234567' });
+      const res = await request(app).post('/api/info').send({ lang: 'he', phone: '055-1234567' });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.data.lang).toBe('he');
@@ -369,15 +365,13 @@ describe('Info Model & API Endpoints', () => {
     });
 
     test('propagates showPrice/email/phone/whatsappLink changes to all languages', async () => {
-      const res = await request(app)
-        .post('/api/info')
-        .send({
-          lang: 'ar',
-          email: 'shared@prket.com',
-          phone: '055-5555555',
-          whatsappLink: 'wa.me/shared',
-          showPrice: true
-        });
+      const res = await request(app).post('/api/info').send({
+        lang: 'ar',
+        email: 'shared@prket.com',
+        phone: '055-5555555',
+        whatsappLink: 'wa.me/shared',
+        showPrice: true,
+      });
 
       expect(res.statusCode).toBe(200);
 
@@ -402,9 +396,7 @@ describe('Info Model & API Endpoints', () => {
     });
 
     test('treats empty lang as English', async () => {
-      const res = await request(app)
-        .post('/api/info')
-        .send({ lang: '', email: 'e@x.com' });
+      const res = await request(app).post('/api/info').send({ lang: '', email: 'e@x.com' });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.data.lang).toBe('en');
@@ -415,9 +407,7 @@ describe('Info Model & API Endpoints', () => {
     });
 
     test('rejects unsupported language with 400 without writing to R2', async () => {
-      const res = await request(app)
-        .post('/api/info')
-        .send({ lang: 'xx', email: 'xx@prket.com' });
+      const res = await request(app).post('/api/info').send({ lang: 'xx', email: 'xx@prket.com' });
 
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);

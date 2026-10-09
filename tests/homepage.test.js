@@ -17,7 +17,7 @@ jest.mock('../src/cloudManager/R2', () => {
     }
     throw new Error('NoSuchKey');
   });
-  const putObject = jest.fn(async (key, body, contentType) => {
+  const putObject = jest.fn(async (key, body) => {
     mockStorage.set(key, body);
     return { success: true };
   });
@@ -40,7 +40,6 @@ jest.mock('../src/cloudManager/R2', () => {
 });
 
 const homepageDataPath = path.join(__dirname, '../src/data/homepage.json');
-const uploadsDir = path.join(__dirname, '../uploads');
 
 describe('Homepage Image API Endpoints', () => {
   let backupData;
@@ -59,8 +58,8 @@ describe('Homepage Image API Endpoints', () => {
         width: 2400,
         height: 1200,
         channels: 4,
-        background: { r: 184, g: 115, b: 51, alpha: 1 }
-      }
+        background: { r: 184, g: 115, b: 51, alpha: 1 },
+      },
     })
       .png()
       .toFile(testImagePath);
@@ -71,9 +70,11 @@ describe('Homepage Image API Endpoints', () => {
         width: 1600,
         height: 1067,
         channels: 4,
-        background: { r: 0, g: 0, b: 0, alpha: 1 }
-      }
-    }).png().toBuffer();
+        background: { r: 0, g: 0, b: 0, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
     mockStorage.set('homePage/homepageImage', dummyImageBuffer);
   });
 
@@ -109,9 +110,7 @@ describe('Homepage Image API Endpoints', () => {
 
   describe('POST /api/homepage-image', () => {
     it('should upload image file and resize width to 1600px', async () => {
-      const res = await request(app)
-        .post('/api/homepage-image')
-        .attach('image', testImagePath);
+      const res = await request(app).post('/api/homepage-image').attach('image', testImagePath);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -127,9 +126,7 @@ describe('Homepage Image API Endpoints', () => {
     });
 
     it('should return 400 Bad Request when no image file is provided', async () => {
-      const res = await request(app)
-        .post('/api/homepage-image')
-        .send({});
+      const res = await request(app).post('/api/homepage-image').send({});
 
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);

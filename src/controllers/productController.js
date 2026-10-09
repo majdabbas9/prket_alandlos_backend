@@ -1,6 +1,4 @@
 const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger').getLogger(__filename);
 const Product = require('../models/Product');
 const R2 = require('../cloudManager/R2');
@@ -8,7 +6,6 @@ const cacheManager = require('../utils/cacheManager');
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
 const PRODUCTS_KEY = 'products/products.json';
-const uploadsDir = path.join(__dirname, '../../uploads');
 
 // Helper function to save products data to R2 and cache
 const saveProductsData = async (products) => {
@@ -16,13 +13,22 @@ const saveProductsData = async (products) => {
     const jsonString = JSON.stringify(products, null, 2);
     const buffer = Buffer.from(jsonString, 'utf8');
 
-    logger.info({ bucket: BUCKET_NAME, key: PRODUCTS_KEY, count: products.length }, 'Pushing products data to R2');
+    logger.info(
+      { bucket: BUCKET_NAME, key: PRODUCTS_KEY, count: products.length },
+      'Pushing products data to R2',
+    );
     await R2.putObject(PRODUCTS_KEY, buffer, 'application/json', BUCKET_NAME);
     await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
-    logger.info({ bucket: BUCKET_NAME, key: PRODUCTS_KEY }, 'Successfully pushed products data to R2');
+    logger.info(
+      { bucket: BUCKET_NAME, key: PRODUCTS_KEY },
+      'Successfully pushed products data to R2',
+    );
     return true;
   } catch (error) {
-    logger.error({ err: error, bucket: BUCKET_NAME, key: PRODUCTS_KEY }, 'Error saving products data to R2');
+    logger.error(
+      { err: error, bucket: BUCKET_NAME, key: PRODUCTS_KEY },
+      'Error saving products data to R2',
+    );
     return false;
   }
 };
@@ -46,7 +52,10 @@ const readProductsData = async () => {
     }
 
     if (!exists) {
-      logger.info({ bucket: BUCKET_NAME, key: PRODUCTS_KEY }, 'Products key not found on R2, initializing empty products list');
+      logger.info(
+        { bucket: BUCKET_NAME, key: PRODUCTS_KEY },
+        'Products key not found on R2, initializing empty products list',
+      );
       const initialProducts = [];
       await saveProductsData(initialProducts);
       return initialProducts;
@@ -82,18 +91,22 @@ exports.getAllProducts = async (req, res) => {
       (p) =>
         (p.title && p.title.toLowerCase().includes(query)) ||
         (p.description && p.description.toLowerCase().includes(query)) ||
-        (p.category && p.category.toLowerCase().includes(query))
+        (p.category && p.category.toLowerCase().includes(query)),
     );
-    logger.info({ searchQuery: query, matches: products.length }, 'Filtered products by search query');
+    logger.info(
+      { searchQuery: query, matches: products.length },
+      'Filtered products by search query',
+    );
   }
 
   // Filter by specific category
   if (category) {
     const catQuery = category.trim().toLowerCase();
-    products = products.filter(
-      (p) => p.category && p.category.toLowerCase() === catQuery
+    products = products.filter((p) => p.category && p.category.toLowerCase() === catQuery);
+    logger.info(
+      { categoryQuery: catQuery, matches: products.length },
+      'Filtered products by category',
     );
-    logger.info({ categoryQuery: catQuery, matches: products.length }, 'Filtered products by category');
   }
 
   // Sorting
@@ -119,14 +132,17 @@ exports.getAllProducts = async (req, res) => {
     const endIndex = pageNum * limitNum;
     const paginatedProducts = products.slice(startIndex, endIndex);
 
-    logger.info({ page: pageNum, limit: limitNum, count: paginatedProducts.length, total: products.length }, 'Returning paginated products');
+    logger.info(
+      { page: pageNum, limit: limitNum, count: paginatedProducts.length, total: products.length },
+      'Returning paginated products',
+    );
     return res.status(200).json({
       success: true,
       count: paginatedProducts.length,
       total: products.length,
       page: pageNum,
       totalPages: Math.ceil(products.length / limitNum),
-      data: paginatedProducts
+      data: paginatedProducts,
     });
   }
 
@@ -134,7 +150,7 @@ exports.getAllProducts = async (req, res) => {
   return res.status(200).json({
     success: true,
     count: products.length,
-    data: products
+    data: products,
   });
 };
 
@@ -149,27 +165,37 @@ exports.getProductById = async (req, res) => {
     logger.warn({ productId: id }, 'Product not found by ID');
     return res.status(404).json({
       success: false,
-      error: `Product with ID '${id}' not found`
+      error: `Product with ID '${id}' not found`,
     });
   }
 
   logger.info({ productId: id, title: product.title }, 'Found product by ID');
   return res.status(200).json({
     success: true,
-    data: product
+    data: product,
   });
 };
 
 // 3. POST add new product (supports JSON or multipart upload)
 exports.addProduct = async (req, res) => {
-  logger.info({ body: req.body, file: req.file ? req.file.originalname : null }, 'POST /api/products - Adding new product');
+  logger.info(
+    { body: req.body, file: req.file ? req.file.originalname : null },
+    'POST /api/products - Adding new product',
+  );
   const { title, price, category, description } = req.body;
-  let imageKey = req.body ? (req.body.imageKey || req.body.imageUrl || req.body.image) : undefined;
+  let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
   try {
     // If a file was uploaded via multer
     if (req.file) {
       imageKey = await Product.uploadImage(req.file.path, req.file.mimetype, req.file.originalname);
-      logger.info({ uploadedFile: req.file.filename, originalName: req.file.originalname, imageKey: imageKey }, 'Processing uploaded product image file');
+      logger.info(
+        {
+          uploadedFile: req.file.filename,
+          originalName: req.file.originalname,
+          imageKey: imageKey,
+        },
+        'Processing uploaded product image file',
+      );
       // Cleanup local temp file since it's uploaded to R2
       try {
         fs.unlinkSync(req.file.path);
@@ -182,7 +208,8 @@ exports.addProduct = async (req, res) => {
       logger.warn('Product addition failed: missing imageKey or file');
       return res.status(400).json({
         success: false,
-        error: 'Image is required. Provide an "imageKey" or "imageUrl" string, or upload a file using field name "file" or "image".'
+        error:
+          'Image is required. Provide an "imageKey" or "imageUrl" string, or upload a file using field name "file" or "image".',
       });
     }
 
@@ -191,7 +218,7 @@ exports.addProduct = async (req, res) => {
       price,
       category,
       description,
-      imageKey: imageKey.trim()
+      imageKey: imageKey.trim(),
     });
 
     const newProduct = newProductInstance.toJSON();
@@ -201,11 +228,14 @@ exports.addProduct = async (req, res) => {
     // Save & sync to R2
     await saveProductsData(currentProducts);
 
-    logger.info({ newProductId: newProduct.id, title: newProduct.title }, 'Product added successfully');
+    logger.info(
+      { newProductId: newProduct.id, title: newProduct.title },
+      'Product added successfully',
+    );
     return res.status(201).json({
       success: true,
       message: 'Product added successfully',
-      data: newProduct
+      data: newProduct,
     });
   } catch (error) {
     logger.error({ err: error }, 'Error adding product');
@@ -216,7 +246,10 @@ exports.addProduct = async (req, res) => {
 // 4. PUT update product by ID
 exports.updateProduct = async (req, res) => {
   const { id } = req.params;
-  logger.info({ productId: id, body: req.body, hasFile: !!req.file }, 'PUT /api/products/:id - Updating product');
+  logger.info(
+    { productId: id, body: req.body, hasFile: !!req.file },
+    'PUT /api/products/:id - Updating product',
+  );
   const products = await readProductsData();
   const productIndex = products.findIndex((p) => p.id === id);
 
@@ -224,23 +257,28 @@ exports.updateProduct = async (req, res) => {
     logger.warn({ productId: id }, 'Product update failed: product not found');
     return res.status(404).json({
       success: false,
-      error: `Product with ID '${id}' not found`
+      error: `Product with ID '${id}' not found`,
     });
   }
 
   try {
     const existing = products[productIndex];
     const { title, price, category, description } = req.body;
-    let imageKey = req.body ? (req.body.imageKey || req.body.imageUrl || req.body.image) : undefined;
+    let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
 
     if (req.file) {
-      logger.info({ uploadedFile: req.file.filename }, 'Updating product with new image file upload to R2');
+      logger.info(
+        { uploadedFile: req.file.filename },
+        'Updating product with new image file upload to R2',
+      );
       imageKey = await Product.uploadImage(req.file.path, req.file.mimetype, req.file.originalname);
 
       // Clean up local temp file
       try {
         fs.unlinkSync(req.file.path);
-      } catch (e) { }
+      } catch {
+        // Ignore: temp file may already be gone
+      }
 
       // Delete previous image from R2 if it was an R2 key
       if (existing.imageKey) {
@@ -248,7 +286,10 @@ exports.updateProduct = async (req, res) => {
           await R2.deleteObject(existing.imageKey, BUCKET_NAME);
           logger.info({ prevKey: existing.imageKey }, 'Deleted previous product image from R2');
         } catch (delErr) {
-          logger.error({ err: delErr, prevKey: existing.imageKey }, 'Error deleting previous product image from R2');
+          logger.error(
+            { err: delErr, prevKey: existing.imageKey },
+            'Error deleting previous product image from R2',
+          );
         }
       }
     }
@@ -260,7 +301,7 @@ exports.updateProduct = async (req, res) => {
       category: category !== undefined ? category : existing.category,
       description: description !== undefined ? description : existing.description,
       imageKey: imageKey ? imageKey.trim() : existing.imageKey,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     }).toJSON();
 
     products[productIndex] = updatedProduct;
@@ -270,7 +311,7 @@ exports.updateProduct = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: updatedProduct
+      data: updatedProduct,
     });
   } catch (error) {
     logger.error({ err: error }, 'Error updating product');
@@ -289,7 +330,7 @@ exports.deleteProduct = async (req, res) => {
     logger.warn({ productId: id }, 'Product deletion failed: product not found');
     return res.status(404).json({
       success: false,
-      error: `Product with ID '${id}' not found`
+      error: `Product with ID '${id}' not found`,
     });
   }
 
@@ -302,7 +343,10 @@ exports.deleteProduct = async (req, res) => {
         await R2.deleteObject(deletedProduct.imageKey, BUCKET_NAME);
         logger.info({ key: deletedProduct.imageKey }, 'Deleted product image from R2');
       } catch (err) {
-        logger.error({ err, key: deletedProduct.imageKey }, 'Failed to delete product image from R2');
+        logger.error(
+          { err, key: deletedProduct.imageKey },
+          'Failed to delete product image from R2',
+        );
       }
     }
 
@@ -313,7 +357,7 @@ exports.deleteProduct = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Product '${id}' deleted successfully`,
-      data: deletedProduct
+      data: deletedProduct,
     });
   } catch (error) {
     logger.error({ err: error }, 'Error deleting product');
@@ -330,7 +374,7 @@ exports.getPhotoByUrl = async (req, res) => {
     logger.warn('Product photo request missing valid url parameter');
     return res.status(400).json({
       success: false,
-      error: 'A valid "url" or "key" query parameter is required'
+      error: 'A valid "url" or "key" query parameter is required',
     });
   }
   logger.info({ key: targetUrl }, 'Fetching image from R2');
@@ -349,7 +393,7 @@ exports.getPhotoByUrl = async (req, res) => {
     logger.error({ err: error, key: targetUrl }, 'Failed to fetch image from R2');
     return res.status(404).json({
       success: false,
-      error: 'Image not found in storage'
+      error: 'Image not found in storage',
     });
   }
 };

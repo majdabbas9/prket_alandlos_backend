@@ -14,7 +14,7 @@ async function authMiddleware(req, res, next) {
     logger.warn('Auth validation failed: Authorization token is missing or malformed');
     return res.status(401).json({
       success: false,
-      error: 'Authorization token is missing or malformed'
+      error: 'Authorization token is missing or malformed',
     });
   }
 
@@ -25,9 +25,9 @@ async function authMiddleware(req, res, next) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ token })
+      body: JSON.stringify({ token }),
     });
 
     const result = await response.json();
@@ -36,7 +36,7 @@ async function authMiddleware(req, res, next) {
       logger.warn({ error: result.message }, 'Auth validation failed: Invalid token');
       return res.status(401).json({
         success: false,
-        error: result.message || 'Invalid authorization token'
+        error: result.message || 'Invalid authorization token',
       });
     }
 
@@ -47,7 +47,7 @@ async function authMiddleware(req, res, next) {
     logger.error({ error: error.message }, 'Error calling validation API');
     return res.status(500).json({
       success: false,
-      error: 'Internal server error validating token'
+      error: 'Internal server error validating token',
     });
   }
 }

@@ -17,7 +17,7 @@ exports.getHomepageImage = async (req, res) => {
       logger.info({ key: currentHomepage.key }, 'Returning homepage image JSON metadata to client');
       return res.status(200).json({
         success: true,
-        data: currentHomepage.toJSON()
+        data: currentHomepage.toJSON(),
       });
     }
 
@@ -32,20 +32,23 @@ exports.getHomepageImage = async (req, res) => {
     logger.error({ err: error }, 'Error fetching/serving homepage image');
     return res.status(500).json({
       success: false,
-      error: 'Failed to retrieve or initialize homepage image: ' + error.message
+      error: 'Failed to retrieve or initialize homepage image: ' + error.message,
     });
   }
 };
 
 // 2. POST Update Homepage Image with sharp processing (resizing width to 1600 if needed)
 exports.updateHomepageImage = async (req, res) => {
-  logger.info({ file: req.file ? req.file.originalname : null }, 'POST /api/homepage-image - Updating homepage image');
+  logger.info(
+    { file: req.file ? req.file.originalname : null },
+    'POST /api/homepage-image - Updating homepage image',
+  );
   try {
     if (!req.file) {
       logger.warn('Homepage image update attempt without file payload');
       return res.status(400).json({
         success: false,
-        error: 'Image is required. Upload a file using form-data field "image".'
+        error: 'Image is required. Upload a file using form-data field "image".',
       });
     }
 
@@ -68,14 +71,13 @@ exports.updateHomepageImage = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Homepage image updated successfully',
-      data: currentHomepage.toJSON()
+      data: currentHomepage.toJSON(),
     });
   } catch (error) {
     logger.error({ err: error }, 'Error updating homepage image');
     return res.status(500).json({
       success: false,
-      error: 'Failed to process and update homepage image: ' + error.message
+      error: 'Failed to process and update homepage image: ' + error.message,
     });
   }
 };
-

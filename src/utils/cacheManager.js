@@ -7,7 +7,7 @@ const KEYS = {
   STORE_INFO: 'store_info',
   STORE_INFO_AR: 'store_info_ar',
   STORE_INFO_HE: 'store_info_he',
-  PRODUCTS: 'products'
+  PRODUCTS: 'products',
 };
 
 let redisClient;
@@ -17,7 +17,7 @@ let redisClient;
  */
 async function init() {
   redisClient = createClient({
-    url: process.env.REDIS_URL
+    url: process.env.REDIS_URL,
   });
 
   redisClient.on('error', (err) => logger.error({ err }, 'Redis Client Error'));
@@ -120,5 +120,5 @@ module.exports = {
   set,
   clear,
   has,
-  getClient
+  getClient,
 };
