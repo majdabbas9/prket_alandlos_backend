@@ -18,6 +18,9 @@ let redisClient;
 async function init() {
   redisClient = createClient({
     url: process.env.REDIS_URL,
+    // Fail commands immediately while Redis is down instead of queueing them
+    // until a reconnect - callers fall back to R2, so a dead cache only costs speed.
+    disableOfflineQueue: true,
   });
 
   redisClient.on('error', (err) => logger.error({ err }, 'Redis Client Error'));
