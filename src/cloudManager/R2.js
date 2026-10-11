@@ -111,22 +111,30 @@ async function headObject(key, bucketName = BUCKET_NAME) {
   }
 }
 
-async function ObjectExists(key, bucketName = BUCKET_NAME) {
-  logger.info({ bucket: bucketName, key }, 'Checking R2 object existence');
+/**
+ * Uploads an object only if no object exists under `key` yet (conditional PUT with
+ * If-None-Match: *), so it can never overwrite existing data.
+ * @returns {Promise<boolean>} true if created, false if the key already existed
+ */
+async function putObjectIfAbsent(key, body, contentType, bucketName = BUCKET_NAME) {
+  logger.info({ bucket: bucketName, key, contentType }, 'Creating R2 object if absent');
   try {
-    const command = new HeadObjectCommand({
+    const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
+      Body: body,
+      ContentType: contentType,
+      IfNoneMatch: '*',
     });
     await s3Client.send(command);
-    logger.info({ bucket: bucketName, key, exists: true }, 'R2 object exists');
+    logger.info({ bucket: bucketName, key }, 'Created R2 object');
     return true;
   } catch (error) {
-    if (isNotFound(error)) {
-      logger.info({ bucket: bucketName, key, exists: false }, 'R2 object does not exist');
+    if (error.name === 'PreconditionFailed' || error.$metadata?.httpStatusCode === 412) {
+      logger.info({ bucket: bucketName, key }, 'R2 object already exists, left unchanged');
       return false;
     }
-    logger.error({ err: error, bucket: bucketName, key }, 'Error checking R2 object existence');
+    logger.error({ err: error, bucket: bucketName, key }, 'Error creating R2 object');
     throw error;
   }
 }
@@ -136,6 +144,6 @@ module.exports = {
   putObject,
   deleteObject,
   headObject,
-  ObjectExists,
+  putObjectIfAbsent,
   isNotFound,
 };

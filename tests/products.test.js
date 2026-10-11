@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
+const R2 = require('../src/cloudManager/R2');
 
 // Mock R2 module to handle in-memory storage for products during tests
 const mockStorage = new Map();
@@ -12,7 +13,7 @@ jest.mock('../src/cloudManager/R2', () => {
         ContentLength: mockStorage.get(key).length,
       };
     }
-    throw new Error('NoSuchKey');
+    throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' });
   });
   const putObject = jest.fn(async (key, body) => {
     mockStorage.set(key, body);
@@ -22,14 +23,11 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(key);
     return { success: true };
   });
-  const ObjectExists = jest.fn(async (key) => {
-    return mockStorage.has(key);
-  });
   return {
     getObject,
     putObject,
     deleteObject,
-    ObjectExists,
+    isNotFound: (err) => err.name === 'NoSuchKey',
   };
 });
 
@@ -163,6 +161,51 @@ describe('Prket Alandlos Backend API Tests', () => {
       const res = await request(app).get('/api/products/non_existent_id_9999');
       expect(res.statusCode).toEqual(404);
       expect(res.body.success).toBe(false);
+    });
+  });
+
+  describe('R2 read failures', () => {
+    const PRODUCTS_KEY = 'products/products.json';
+    const existing = [{ id: 'keep-me', title: 'Existing product', imageKey: 'products/x.jpg' }];
+    const r2Outage = () =>
+      Object.assign(new Error('Service Unavailable'), {
+        name: 'InternalError',
+        $metadata: { httpStatusCode: 503 },
+      });
+
+    beforeEach(() => {
+      mockStorage.set(PRODUCTS_KEY, Buffer.from(JSON.stringify(existing)));
+      R2.getObject.mockImplementationOnce(async () => {
+        throw r2Outage();
+      });
+      R2.putObject.mockClear();
+    });
+
+    it('GET /api/products returns 500 instead of an empty list', async () => {
+      const res = await request(app).get('/api/products');
+      expect(res.statusCode).toEqual(500);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('POST /api/products does not overwrite the catalog when the read fails', async () => {
+      const res = await request(app)
+        .post('/api/products')
+        .send({ title: 'New', price: 1, imageKey: 'products/new.jpg' });
+
+      expect(res.statusCode).toEqual(500);
+      expect(R2.putObject).not.toHaveBeenCalledWith(
+        PRODUCTS_KEY,
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(JSON.parse(mockStorage.get(PRODUCTS_KEY).toString())).toEqual(existing);
+    });
+
+    it('DELETE /api/products/:id returns 500 when the read fails', async () => {
+      const res = await request(app).delete('/api/products/keep-me');
+      expect(res.statusCode).toEqual(500);
+      expect(JSON.parse(mockStorage.get(PRODUCTS_KEY).toString())).toEqual(existing);
     });
   });
 

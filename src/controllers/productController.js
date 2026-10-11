@@ -33,54 +33,51 @@ const saveProductsData = async (products) => {
   }
 };
 
-// Helper function to read products data from cache or R2
+// Helper function to read products data from cache or R2.
+// Throws on R2 errors - never fall back to [] here, or a following save would wipe the catalog.
 const readProductsData = async () => {
+  const cached = await cacheManager.get(cacheManager.KEYS.PRODUCTS);
+  if (cached) {
+    logger.info('Serving products from cache');
+    return cached;
+  }
+
+  let response;
   try {
-    const cached = await cacheManager.get(cacheManager.KEYS.PRODUCTS);
-    if (cached) {
-      logger.info('Serving products from cache');
-      return cached;
-    }
-
-    let exists = false;
-    if (typeof R2.ObjectExists === 'function') {
-      try {
-        exists = await R2.ObjectExists(PRODUCTS_KEY, BUCKET_NAME);
-      } catch (err) {
-        logger.warn({ err, key: PRODUCTS_KEY }, 'Error checking R2 object existence for products');
-      }
-    }
-
-    if (!exists) {
-      logger.info(
-        { bucket: BUCKET_NAME, key: PRODUCTS_KEY },
-        'Products key not found on R2, initializing empty products list',
-      );
-      const initialProducts = [];
-      await saveProductsData(initialProducts);
-      return initialProducts;
-    }
-
-    const response = await R2.getObject(PRODUCTS_KEY, BUCKET_NAME);
-    const chunks = [];
-    for await (const chunk of response.Body) {
-      chunks.push(chunk);
-    }
-    const content = Buffer.concat(chunks).toString('utf8');
-    const products = JSON.parse(content || '[]');
-    await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
-    logger.info({ count: products.length }, 'Successfully retrieved products from R2');
-    return products;
+    response = await R2.getObject(PRODUCTS_KEY, BUCKET_NAME);
   } catch (error) {
-    logger.error({ err: error }, 'Error reading products data');
+    if (!R2.isNotFound(error)) throw error;
+    // Created at startup (utils/ensureDefaults), so this only happens if it was deleted since
+    logger.warn({ bucket: BUCKET_NAME, key: PRODUCTS_KEY }, 'Products key missing on R2');
     return [];
   }
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(chunk);
+  }
+  const content = Buffer.concat(chunks).toString('utf8');
+  const products = JSON.parse(content || '[]');
+  await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
+  logger.info({ count: products.length }, 'Successfully retrieved products from R2');
+  return products;
+};
+
+// Responds 500 when products could not be read from R2
+const handleReadError = (res, error) => {
+  logger.error({ err: error }, 'Error reading products data');
+  return res.status(500).json({ success: false, error: 'Internal Server Error' });
 };
 
 // 1. GET all products (Supports filtering, searching, sorting, pagination)
 exports.getAllProducts = async (req, res) => {
   logger.info({ query: req.query }, 'GET /api/products - Fetching all products');
-  let products = await readProductsData();
+  let products;
+  try {
+    products = await readProductsData();
+  } catch (error) {
+    return handleReadError(res, error);
+  }
 
   const { search, category, sort = 'newest', page, limit } = req.query;
 
@@ -158,7 +155,12 @@ exports.getAllProducts = async (req, res) => {
 exports.getProductById = async (req, res) => {
   const { id } = req.params;
   logger.info({ productId: id }, 'GET /api/products/:id - Fetching product by ID');
-  const products = await readProductsData();
+  let products;
+  try {
+    products = await readProductsData();
+  } catch (error) {
+    return handleReadError(res, error);
+  }
   const product = products.find((p) => p.id === id);
 
   if (!product) {
@@ -250,7 +252,12 @@ exports.updateProduct = async (req, res) => {
     { productId: id, body: req.body, hasFile: !!req.file },
     'PUT /api/products/:id - Updating product',
   );
-  const products = await readProductsData();
+  let products;
+  try {
+    products = await readProductsData();
+  } catch (error) {
+    return handleReadError(res, error);
+  }
   const productIndex = products.findIndex((p) => p.id === id);
 
   if (productIndex === -1) {
@@ -323,7 +330,12 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
   const { id } = req.params;
   logger.info({ productId: id }, 'DELETE /api/products/:id - Deleting product');
-  const products = await readProductsData();
+  let products;
+  try {
+    products = await readProductsData();
+  } catch (error) {
+    return handleReadError(res, error);
+  }
   const productIndex = products.findIndex((p) => p.id === id);
 
   if (productIndex === -1) {

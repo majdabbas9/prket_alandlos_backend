@@ -35,15 +35,11 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(key);
     return { success: true };
   });
-  const ObjectExists = jest.fn(async (key) => {
-    return mockStorage.has(key);
-  });
   return {
     getObject,
     headObject,
     putObject,
     deleteObject,
-    ObjectExists,
     isNotFound: (err) => err.name === 'NoSuchKey',
   };
 });
@@ -137,12 +133,20 @@ describe('Homepage Image API Endpoints', () => {
       expect(R2.getObject).not.toHaveBeenCalled();
     });
 
-    it('should create default parket image on R2 if key does not exist', async () => {
-      mockStorage.clear();
+    it('should return 404 without creating anything when the image is missing on R2', async () => {
+      const R2 = require('../src/cloudManager/R2');
+      const saved = mockStorage.get('homePage/homepageImage');
+      mockStorage.delete('homePage/homepageImage');
+      R2.putObject.mockClear();
+
       const res = await request(app).get('/api/homepage-image');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toMatch(/image\/(jpeg|png|webp|avif|gif)/);
-      expect(mockStorage.has('homePage/homepageImage')).toBe(true);
+      expect(res.statusCode).toBe(404);
+      expect(res.body.success).toBe(false);
+      const meta = await request(app).get('/api/homepage-image?info=true');
+      expect(meta.statusCode).toBe(404);
+      expect(R2.putObject).not.toHaveBeenCalled();
+
+      mockStorage.set('homePage/homepageImage', saved);
     });
   });
 

@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { Readable } = require('stream');
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
 const logger = require('../utils/logger').getLogger(__filename);
@@ -125,25 +124,9 @@ class Logo {
   }
 
   /**
-   * Loads the default logo image and uploads it to R2 under `key`.
-   * Used the first time the logo is requested and the key is missing.
-   * @param {string} key
-   * @returns {Promise<{buffer: Buffer, width: number, height: number, mimeType: string, size: number}>}
-   */
-  static async createDefaultImage(key) {
-    logger.info(
-      { key },
-      'Logo image key not found on R2. Creating key with image from internet about parket logo',
-    );
-    const defaultImg = await Logo.downloadOrGenerateParketLogoImage();
-    await R2.putObject(key, defaultImg.buffer, defaultImg.mimeType);
-    return defaultImg;
-  }
-
-  /**
-   * Opens the logo image on R2 as a stream (bootstrapping a default logo if missing).
+   * Opens the logo image on R2 as a stream.
    * @param {string} [key=LOGO_KEY]
-   * @returns {Promise<{body: Readable, contentType: string, contentLength?: number, etag?: string, lastModified?: Date}>}
+   * @returns {Promise<null|{body: import('stream').Readable, contentType: string, contentLength?: number, etag?: string, lastModified?: Date}>}
    */
   static async getImage(key = LOGO_KEY) {
     try {
@@ -158,20 +141,13 @@ class Logo {
     } catch (err) {
       if (!R2.isNotFound(err)) throw err;
     }
-
-    const defaultImg = await Logo.createDefaultImage(key);
-    return {
-      body: Readable.from([defaultImg.buffer]),
-      contentType: defaultImg.mimeType,
-      contentLength: defaultImg.size,
-    };
+    return null;
   }
 
   /**
-   * Reads logo metadata from R2 without downloading the image
-   * (bootstrapping a default logo if missing).
+   * Reads logo metadata from R2 without downloading the image.
    * @param {string} [key=LOGO_KEY]
-   * @returns {Promise<Logo>}
+   * @returns {Promise<Logo|null>} null if the object is missing
    */
   static async getMetadata(key = LOGO_KEY) {
     try {
@@ -184,16 +160,7 @@ class Logo {
     } catch (err) {
       if (!R2.isNotFound(err)) throw err;
     }
-
-    const defaultImg = await Logo.createDefaultImage(key);
-    return new Logo({
-      key,
-      width: defaultImg.width,
-      height: defaultImg.height,
-      mimeType: defaultImg.mimeType,
-      size: defaultImg.size,
-      updatedAt: new Date().toISOString(),
-    });
+    return null;
   }
 
   /**

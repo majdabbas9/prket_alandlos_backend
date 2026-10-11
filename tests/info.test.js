@@ -11,8 +11,6 @@ const mockCache = new Map();
 jest.mock('../src/utils/cacheManager', () => {
   return {
     KEYS: {
-      HOMEPAGE_IMAGE: 'homepage_image',
-      LOGO_IMAGE: 'logo_image',
       STORE_INFO: 'store_info',
       STORE_INFO_AR: 'store_info_ar',
       STORE_INFO_HE: 'store_info_he',
@@ -43,7 +41,7 @@ jest.mock('../src/cloudManager/R2', () => {
         Body: [Buffer.from(mockStorage.get(storageKey), 'utf8')],
       };
     }
-    throw new Error('NoSuchKey');
+    throw Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey' });
   });
   const putObject = jest.fn(async (key, body, contentType, bucketName) => {
     const storageKey = `${bucketName}:${key}`;
@@ -55,18 +53,11 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(storageKey);
     return { success: true };
   });
-  const ObjectExists = jest.fn(async (key, bucketName) => {
-    const storageKey = `${bucketName}:${key}`;
-    return mockStorage.has(storageKey);
-  });
   return {
     getObject,
     putObject,
     deleteObject,
-    ObjectExists,
-    getImage: getObject,
-    uploadImage: putObject,
-    deleteImage: deleteObject,
+    isNotFound: (err) => err.name === 'NoSuchKey',
   };
 });
 
@@ -206,70 +197,88 @@ describe('Info Model & API Endpoints', () => {
   });
 
   describe('GET /api/info', () => {
-    test('creates and returns default store information in R2 when file does not exist', async () => {
+    const seed = (r2Key, InfoClass) =>
+      mockStorage.set(`prket-andlos:${r2Key}`, JSON.stringify(new InfoClass().toJSON()));
+
+    test('returns default store information without writing to R2 when file does not exist', async () => {
       const res = await request(app).get('/api/info');
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.lang).toBe('en');
-      expect(res.body.data).toHaveProperty('email');
+      expect(res.body.data.email).toBe(EnglishInfo.getDefaults().email);
       expect(res.body.data).toHaveProperty('showPrice');
 
-      // Verify that R2 mock storage now holds the created default info file
-      const stored = mockStorage.get('prket-andlos:info/info.json');
-      expect(stored).toBeDefined();
-      const parsed = JSON.parse(stored);
-      expect(parsed.lang).toBe('en');
-      expect(parsed.email).toBe(EnglishInfo.getDefaults().email);
+      // Defaults are created at startup (ensureDefaults), never by a GET
+      expect(R2.putObject).not.toHaveBeenCalled();
+      expect(mockStorage.has('prket-andlos:info/info.json')).toBe(false);
     });
 
     test('serves store info from cache on subsequent requests without calling R2.getObject', async () => {
-      // First request populates cache
-      await request(app).get('/api/info');
-      expect(R2.getObject).not.toHaveBeenCalled(); // First request called ObjectExists and created default, then set cache
+      seed('info/info.json', EnglishInfo);
 
-      // Reset getObject call count
+      // First request reads R2 and populates cache
+      await request(app).get('/api/info');
+      expect(R2.getObject).toHaveBeenCalledTimes(1);
       R2.getObject.mockClear();
 
-      // Second GET request should hit the in-memory cache
+      // Second GET request should hit the cache
       const res = await request(app).get('/api/info');
       expect(res.statusCode).toBe(200);
       expect(res.body.data.email).toBe(EnglishInfo.getDefaults().email);
       expect(R2.getObject).not.toHaveBeenCalled();
     });
 
-    test('returns Arabic store info and creates only the Arabic R2 file when ?lang=ar', async () => {
+    test('returns Arabic store info when ?lang=ar without writing to R2', async () => {
       const res = await request(app).get('/api/info?lang=ar');
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.lang).toBe('ar');
       expect(res.body.data.description).toBe('ألاندلوس باركيه كفر كنا');
-
-      expect(mockStorage.get('prket-andlos:info/info-ar.json')).toBeDefined();
-      expect(mockStorage.has('prket-andlos:info/info.json')).toBe(false);
+      expect(R2.putObject).not.toHaveBeenCalled();
     });
 
-    test('returns Hebrew store info and creates only the Hebrew R2 file when ?lang=he', async () => {
+    test('returns Hebrew store info from the Hebrew R2 file when ?lang=he', async () => {
+      seed('info/info-he.json', HebrewInfo);
       const res = await request(app).get('/api/info?lang=he');
       expect(res.statusCode).toBe(200);
       expect(res.body.data.lang).toBe('he');
       expect(res.body.data.location).toBe('אלנדלוס פרקט כפר כנא');
-
-      const stored = mockStorage.get('prket-andlos:info/info-he.json');
-      expect(stored).toBeDefined();
-      expect(JSON.parse(stored).lang).toBe('he');
-      expect(mockStorage.has('prket-andlos:info/info.json')).toBe(false);
+      expect(R2.getObject).toHaveBeenCalledWith('info/info-he.json', 'prket-andlos');
     });
 
     test('serves Arabic store info from cache on subsequent requests', async () => {
+      seed('info/info-ar.json', ArabicInfo);
+
       // First request populates cache
       await request(app).get('/api/info?lang=ar');
       R2.getObject.mockClear();
 
-      // Second GET request should hit the in-memory cache
+      // Second GET request should hit the cache
       const res = await request(app).get('/api/info?lang=ar');
       expect(res.statusCode).toBe(200);
       expect(res.body.data.lang).toBe('ar');
       expect(R2.getObject).not.toHaveBeenCalled();
+    });
+
+    test('returns 500 (not defaults) when R2 fails, and POST does not overwrite stored info', async () => {
+      const stored = { ...new EnglishInfo().toJSON(), email: 'real@prket.com' };
+      mockStorage.set('prket-andlos:info/info.json', JSON.stringify(stored));
+      const outage = () =>
+        Object.assign(new Error('Service Unavailable'), { name: 'InternalError' });
+      R2.getObject.mockImplementationOnce(async () => {
+        throw outage();
+      });
+      R2.getObject.mockImplementationOnce(async () => {
+        throw outage();
+      });
+
+      const getRes = await request(app).get('/api/info');
+      expect(getRes.statusCode).toBe(500);
+
+      const postRes = await request(app).post('/api/info').send({ phone: '000' });
+      expect(postRes.statusCode).toBe(500);
+      expect(R2.putObject).not.toHaveBeenCalled();
+      expect(JSON.parse(mockStorage.get('prket-andlos:info/info.json'))).toEqual(stored);
     });
 
     test('normalizes lang case and whitespace', async () => {

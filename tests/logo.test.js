@@ -35,15 +35,11 @@ jest.mock('../src/cloudManager/R2', () => {
     mockStorage.delete(key);
     return { success: true };
   });
-  const ObjectExists = jest.fn(async (key) => {
-    return mockStorage.has(key);
-  });
   return {
     getObject,
     headObject,
     putObject,
     deleteObject,
-    ObjectExists,
     isNotFound: (err) => err.name === 'NoSuchKey',
   };
 });
@@ -125,12 +121,20 @@ describe('Logo API Endpoints (/api/logo)', () => {
       expect(res.headers['content-type']).toMatch(/image\/(jpeg|png|webp|avif|gif|svg)/);
     });
 
-    it('should create default parket logo image on R2 if key does not exist', async () => {
-      mockStorage.clear();
+    it('should return 404 without creating anything when the image is missing on R2', async () => {
+      const R2 = require('../src/cloudManager/R2');
+      const saved = mockStorage.get('logo/logoImage');
+      mockStorage.delete('logo/logoImage');
+      R2.putObject.mockClear();
+
       const res = await request(app).get('/api/logo');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toMatch(/image\/(jpeg|png|webp|avif|gif)/);
-      expect(mockStorage.has('logo/logoImage')).toBe(true);
+      expect(res.statusCode).toBe(404);
+      expect(res.body.success).toBe(false);
+      const meta = await request(app).get('/api/logo?info=true');
+      expect(meta.statusCode).toBe(404);
+      expect(R2.putObject).not.toHaveBeenCalled();
+
+      mockStorage.set('logo/logoImage', saved);
     });
   });
 

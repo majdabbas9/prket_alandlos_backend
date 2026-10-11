@@ -33,43 +33,45 @@ const saveInfoData = async (infoInstance, lang = 'en') => {
   }
 };
 
-// Helper to read info metadata from R2 (checks cache first; if miss, checks if key exists in R2 or creates standard defaults)
+// Helper to read info metadata from R2 (checks cache first).
+// Throws on R2 errors - never fall back to defaults here, or a following save would replace real info.
 const readInfoData = async (lang = 'en') => {
-  try {
-    const entry = LANGUAGES[lang];
-    const cached = await cacheManager.get(entry.cacheKey);
-    if (cached) {
-      logger.info({ lang }, 'Serving store info from cache');
-      return new entry.InfoClass(cached);
-    }
-
-    if (!(await R2.ObjectExists(entry.r2Key, BUCKET_NAME))) {
-      logger.info(
-        { bucket: BUCKET_NAME, key: entry.r2Key },
-        'info key not found creating a new default one',
-      );
-      const defaultInfo = new entry.InfoClass();
-      await saveInfoData(defaultInfo, lang);
-      return defaultInfo;
-    }
-    const response = await R2.getObject(entry.r2Key, BUCKET_NAME);
-    const chunks = [];
-    for await (const chunk of response.Body) {
-      chunks.push(chunk);
-    }
-    const content = Buffer.concat(chunks).toString('utf8');
-    logger.info(
-      { bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: content.length },
-      'Successfully retrieved info data from R2',
-    );
-
-    const infoObj = entry.InfoClass.fromJSON(content);
-    await cacheManager.set(entry.cacheKey, infoObj);
-    return infoObj;
-  } catch (error) {
-    logger.error({ err: error }, 'Error reading store info data');
-    throw error;
+  const entry = LANGUAGES[lang];
+  const cached = await cacheManager.get(entry.cacheKey);
+  if (cached) {
+    logger.info({ lang }, 'Serving store info from cache');
+    return new entry.InfoClass(cached);
   }
+
+  let response;
+  try {
+    response = await R2.getObject(entry.r2Key, BUCKET_NAME);
+  } catch (error) {
+    if (!R2.isNotFound(error)) {
+      logger.error({ err: error, key: entry.r2Key }, 'Error reading store info data');
+      throw error;
+    }
+    // Created at startup (utils/ensureDefaults), so this only happens if it was deleted since
+    logger.warn(
+      { bucket: BUCKET_NAME, key: entry.r2Key },
+      'Info key missing on R2, using defaults',
+    );
+    return new entry.InfoClass();
+  }
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(chunk);
+  }
+  const content = Buffer.concat(chunks).toString('utf8');
+  logger.info(
+    { bucket: BUCKET_NAME, key: entry.r2Key, sizeBytes: content.length },
+    'Successfully retrieved info data from R2',
+  );
+
+  const infoObj = entry.InfoClass.fromJSON(content);
+  await cacheManager.set(entry.cacheKey, infoObj);
+  return infoObj;
 };
 
 // Helper to propagate shared-field changes from the updated doc to all other languages (best-effort)
@@ -108,11 +110,15 @@ exports.getInfo = async (req, res) => {
       error: `Unsupported language "${req.lang}". Supported: ${SUPPORTED_LANGS.join(', ')}`,
     });
   }
-  const infoObj = await readInfoData(req.lang);
-  return res.status(200).json({
-    success: true,
-    data: infoObj.toJSON(),
-  });
+  try {
+    const infoObj = await readInfoData(req.lang);
+    return res.status(200).json({
+      success: true,
+      data: infoObj.toJSON(),
+    });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Failed to read store information' });
+  }
 };
 
 // POST /api/info

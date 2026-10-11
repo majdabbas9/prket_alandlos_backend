@@ -2,6 +2,7 @@ require('dotenv').config();
 const app = require('./app');
 const logger = require('./src/utils/logger').getLogger(__filename);
 const cacheManager = require('./src/utils/cacheManager');
+const { ensureDefaults } = require('./src/utils/ensureDefaults');
 
 const PORT = process.env.PORT || 8080;
 
@@ -12,6 +13,15 @@ async function startServer() {
     logger.info('Cache Manager initialized successfully');
   } catch (error) {
     logger.error({ error }, 'Failed to initialize Cache Manager');
+    process.exit(1);
+  }
+
+  // Create any missing R2 objects (products, info, images) before serving traffic,
+  // so request handlers never need to check existence or write defaults themselves
+  try {
+    await ensureDefaults();
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to verify R2 defaults - refusing to start');
     process.exit(1);
   }
 

@@ -6,13 +6,21 @@ const logger = require('../utils/logger').getLogger(__filename);
 // Local variable to store current homepage model instance in memory
 let currentHomepage = new Homepage();
 
+// Created at startup (utils/ensureDefaults), so missing means it was deleted from R2 since
+const notFound = (res) => {
+  logger.warn('Homepage image not found on R2');
+  return res.status(404).json({ success: false, error: 'Homepage image not found' });
+};
+
 // 1. GET Homepage Image (returns the actual image file binary, or JSON metadata if ?info=true)
 exports.getHomepageImage = async (req, res) => {
   logger.info({ query: req.query }, 'GET /api/homepage-image - Fetching homepage image');
   try {
     // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
     if (req.query.info === 'true' || req.query.json === 'true') {
-      currentHomepage = await Homepage.getMetadata(currentHomepage.key);
+      const metadata = await Homepage.getMetadata(currentHomepage.key);
+      if (!metadata) return notFound(res);
+      currentHomepage = metadata;
       logger.info({ key: currentHomepage.key }, 'Returning homepage image JSON metadata to client');
       return res.status(200).json({
         success: true,
@@ -21,6 +29,7 @@ exports.getHomepageImage = async (req, res) => {
     }
 
     const image = await Homepage.getImage(currentHomepage.key);
+    if (!image) return notFound(res);
     logger.info(
       { contentType: image.contentType, sizeBytes: image.contentLength },
       'Streaming homepage image from R2',
