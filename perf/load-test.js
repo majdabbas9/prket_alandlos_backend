@@ -100,6 +100,7 @@ async function runEndpoint({ name, path, expectStatus }) {
     p95: percentile(latencies, 95),
     p99: percentile(latencies, 99),
     max: latencies[latencies.length - 1],
+    errorCount: errors.length,
     errorPct: (errors.length / results.length) * 100,
     statusCounts,
     avgKb: results.reduce((a, r) => a + r.bytes, 0) / results.length / 1024,
@@ -119,7 +120,78 @@ async function resolveProductId() {
   }
 }
 
-const fmt = (n) => n.toFixed(0).padStart(6);
+// Colors only when printing to a terminal (keeps CI logs / redirected output clean)
+const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+const paint = (code) => (text) => (useColor ? `\x1b[${code}m${text}\x1b[0m` : text);
+const green = paint(32);
+const red = paint(31);
+const dim = paint(2);
+const bold = paint(1);
+
+const ms = (n) => `${n.toFixed(0)} ms`;
+const verdict = (failed) => (failed ? red('FAIL') : green('PASS'));
+
+// Pass/fail checks for one endpoint; returns human-readable failure reasons
+function checkThresholds(s) {
+  const reasons = [];
+  if (s.p95 > MAX_P95_MS) reasons.push(`p95 ${ms(s.p95)} is over the ${ms(MAX_P95_MS)} limit`);
+  if (s.errorPct > MAX_ERROR_PCT) {
+    const byStatus = Object.entries(s.statusCounts)
+      .map(([status, n]) => `${n}x ${status}`)
+      .join(', ');
+    reasons.push(
+      `${s.errorCount} of ${s.count} requests failed (${s.errorPct.toFixed(1)}%, ` +
+        `limit ${MAX_ERROR_PCT}%): ${byStatus}`,
+    );
+  }
+  return reasons;
+}
+
+function printEndpointReport(s, reasons) {
+  const row = (label, value) => console.log(`    ${dim(label.padEnd(15))}${value}`);
+  console.log(`\n${verdict(reasons.length)}  ${bold(s.name)}  ${dim(s.path)}`);
+  row(
+    'Response time',
+    `median ${ms(s.p50)}  ·  p95 ${ms(s.p95)} ${dim(`(limit ${ms(MAX_P95_MS)})`)}`,
+  );
+  row(
+    '',
+    dim(
+      `fastest ${ms(s.min)}  ·  average ${ms(s.avg)}  ·  p99 ${ms(s.p99)}  ·  slowest ${ms(s.max)}`,
+    ),
+  );
+  row('Throughput', `${s.rps.toFixed(1)} requests/sec`);
+  row(
+    'Errors',
+    `${s.errorCount} of ${s.count} ${dim(`(${s.errorPct.toFixed(1)}%, limit ${MAX_ERROR_PCT}%)`)}`,
+  );
+  row('Response size', `${s.avgKb.toFixed(1)} KB ${dim('average body')}`);
+  for (const r of reasons) console.log(`    ${red('x ' + r)}`);
+}
+
+function printSummaryTable(rows) {
+  const header =
+    'endpoint'.padEnd(20) +
+    'median'.padStart(9) +
+    'p95'.padStart(9) +
+    'req/s'.padStart(8) +
+    'errors'.padStart(10) +
+    'size'.padStart(10) +
+    '  result';
+  console.log(`\n${bold('Summary')}`);
+  console.log(dim(header));
+  for (const { s, reasons } of rows) {
+    console.log(
+      s.name.padEnd(20) +
+        ms(s.p50).padStart(9) +
+        ms(s.p95).padStart(9) +
+        s.rps.toFixed(1).padStart(8) +
+        `${s.errorCount}/${s.count}`.padStart(10) +
+        `${s.avgKb.toFixed(1)} KB`.padStart(10) +
+        `  ${verdict(reasons.length)}`,
+    );
+  }
+}
 
 // Parse --endpoint <name|path> (also -e, --endpoint=<value>) and --list
 function parseArgs(argv) {
@@ -160,10 +232,12 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Performance test → ${BASE_URL}`);
+  console.log(`${bold('Performance test')} → ${BASE_URL}`);
   console.log(
-    `requests/endpoint=${REQUESTS} concurrency=${CONCURRENCY} warmup=${WARMUP} ` +
-      `thresholds: p95<=${MAX_P95_MS}ms errors<=${MAX_ERROR_PCT}%\n`,
+    dim(
+      `${REQUESTS} requests per endpoint, ${CONCURRENCY} at a time (+${WARMUP} warm-up). ` +
+        `Pass if p95 ≤ ${ms(MAX_P95_MS)} and errors ≤ ${MAX_ERROR_PCT}%.\n`,
+    ),
   );
 
   const needsId = selected.some((e) => e.path.includes(':id'));
@@ -188,45 +262,26 @@ async function main() {
     process.stdout.write(`running ${endpoint.name}... `);
     const s = await runEndpoint(endpoint);
     summaries.push(s);
-    console.log(`done (${s.rps.toFixed(1)} req/s)`);
+    console.log(dim('done'));
   }
+
+  const rows = summaries.map((s) => ({ s, reasons: checkThresholds(s) }));
+  for (const { s, reasons } of rows) printEndpointReport(s, reasons);
+  if (rows.length > 1) printSummaryTable(rows);
 
   console.log(
-    '\n' +
-      'endpoint'.padEnd(20) +
-      '   req/s    min    avg    p50    p95    p99    max  err%    KB  result',
+    dim(
+      '\nmedian = half the requests were faster than this · ' +
+        'p95 = 95% were faster (the pass/fail check) · size = average response body',
+    ),
   );
-  console.log('-'.repeat(100));
 
-  const failures = [];
-  for (const s of summaries) {
-    const reasons = [];
-    if (s.p95 > MAX_P95_MS) reasons.push(`p95 ${s.p95.toFixed(0)}ms > ${MAX_P95_MS}ms`);
-    if (s.errorPct > MAX_ERROR_PCT)
-      reasons.push(`errors ${s.errorPct.toFixed(1)}% ${JSON.stringify(s.statusCounts)}`);
-    if (reasons.length) failures.push(`${s.name} (${s.path}): ${reasons.join(', ')}`);
-
-    console.log(
-      s.name.padEnd(20) +
-        s.rps.toFixed(1).padStart(8) +
-        fmt(s.min) +
-        fmt(s.avg) +
-        fmt(s.p50) +
-        fmt(s.p95) +
-        fmt(s.p99) +
-        fmt(s.max) +
-        s.errorPct.toFixed(1).padStart(6) +
-        s.avgKb.toFixed(1).padStart(6) +
-        (reasons.length ? '  FAIL' : '  ok'),
-    );
-  }
-
-  if (failures.length) {
-    console.log(`\n${failures.length} endpoint(s) failed thresholds:`);
-    for (const f of failures) console.log(`  - ${f}`);
+  const failed = rows.filter((r) => r.reasons.length).length;
+  if (failed) {
+    console.log(red(`\n${failed} of ${rows.length} endpoint(s) failed.`));
     process.exit(1);
   }
-  console.log('\nAll endpoints within thresholds.');
+  console.log(green(`\nAll ${rows.length} endpoint(s) passed.`));
 }
 
 main().catch((err) => {
