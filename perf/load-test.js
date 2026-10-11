@@ -24,7 +24,7 @@
 const BASE_URL = (
   process.env.BASE_URL || 'https://prket-alandlos-api.majd-abbas222.workers.dev'
 ).replace(/\/+$/, '');
-const REQUESTS = 100;
+const REQUESTS = parseInt(process.env.REQUESTS, 10) || 50;
 const CONCURRENCY = parseInt(process.env.CONCURRENCY, 10) || 10;
 const WARMUP = process.env.WARMUP !== undefined ? parseInt(process.env.WARMUP, 10) : 2;
 const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS, 10) || 10000;

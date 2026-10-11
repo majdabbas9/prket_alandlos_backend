@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Logo = require('../models/Logo');
+const sendImage = require('../utils/sendImage');
 const logger = require('../utils/logger').getLogger(__filename);
 
 // Local variable to store current logo model instance in memory
@@ -9,11 +10,9 @@ let currentLogo = new Logo();
 exports.getLogo = async (req, res) => {
   logger.info({ query: req.query }, 'GET /api/logo - Fetching logo');
   try {
-    const { buffer, contentType, metadata } = await Logo.getImageData(currentLogo.key);
-    currentLogo = metadata;
-
     // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
     if (req.query.info === 'true' || req.query.json === 'true') {
+      currentLogo = await Logo.getMetadata(currentLogo.key);
       logger.info({ key: currentLogo.key }, 'Returning logo JSON metadata to client');
       return res.status(200).json({
         success: true,
@@ -21,13 +20,12 @@ exports.getLogo = async (req, res) => {
       });
     }
 
-    res.setHeader('Content-Type', contentType);
-    if (buffer.length) {
-      res.setHeader('Content-Length', buffer.length);
-    }
-
-    logger.info({ contentType, sizeBytes: buffer.length }, 'Serving logo binary file');
-    return res.status(200).send(buffer);
+    const image = await Logo.getImage(currentLogo.key);
+    logger.info(
+      { contentType: image.contentType, sizeBytes: image.contentLength },
+      'Streaming logo from R2',
+    );
+    return sendImage(req, res, image);
   } catch (error) {
     logger.error({ err: error }, 'Error fetching/serving logo');
     return res.status(500).json({

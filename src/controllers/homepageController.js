@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Homepage = require('../models/Homepage');
+const sendImage = require('../utils/sendImage');
 const logger = require('../utils/logger').getLogger(__filename);
 
 // Local variable to store current homepage model instance in memory
@@ -9,11 +10,9 @@ let currentHomepage = new Homepage();
 exports.getHomepageImage = async (req, res) => {
   logger.info({ query: req.query }, 'GET /api/homepage-image - Fetching homepage image');
   try {
-    const { buffer, contentType, metadata } = await Homepage.getImageData(currentHomepage.key);
-    currentHomepage = metadata;
-
     // If client specifically requests JSON metadata (e.g. ?info=true or ?json=true)
     if (req.query.info === 'true' || req.query.json === 'true') {
+      currentHomepage = await Homepage.getMetadata(currentHomepage.key);
       logger.info({ key: currentHomepage.key }, 'Returning homepage image JSON metadata to client');
       return res.status(200).json({
         success: true,
@@ -21,13 +20,12 @@ exports.getHomepageImage = async (req, res) => {
       });
     }
 
-    res.setHeader('Content-Type', contentType);
-    if (buffer.length) {
-      res.setHeader('Content-Length', buffer.length);
-    }
-
-    logger.info({ contentType, sizeBytes: buffer.length }, 'Serving homepage image binary file');
-    return res.status(200).send(buffer);
+    const image = await Homepage.getImage(currentHomepage.key);
+    logger.info(
+      { contentType: image.contentType, sizeBytes: image.contentLength },
+      'Streaming homepage image from R2',
+    );
+    return sendImage(req, res, image);
   } catch (error) {
     logger.error({ err: error }, 'Error fetching/serving homepage image');
     return res.status(500).json({

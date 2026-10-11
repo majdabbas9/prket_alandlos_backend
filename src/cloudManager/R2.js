@@ -86,6 +86,31 @@ async function deleteObject(key, bucketName = BUCKET_NAME) {
   }
 }
 
+// True when an R2/S3 error means the object does not exist
+function isNotFound(error) {
+  return (
+    error?.name === 'NotFound' ||
+    error?.name === 'NoSuchKey' ||
+    error?.$metadata?.httpStatusCode === 404
+  );
+}
+
+async function headObject(key, bucketName = BUCKET_NAME) {
+  logger.info({ bucket: bucketName, key }, 'Fetching R2 object metadata');
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    return await s3Client.send(command);
+  } catch (error) {
+    if (!isNotFound(error)) {
+      logger.error({ err: error, bucket: bucketName, key }, 'Error fetching R2 object metadata');
+    }
+    throw error;
+  }
+}
+
 async function ObjectExists(key, bucketName = BUCKET_NAME) {
   logger.info({ bucket: bucketName, key }, 'Checking R2 object existence');
   try {
@@ -97,11 +122,7 @@ async function ObjectExists(key, bucketName = BUCKET_NAME) {
     logger.info({ bucket: bucketName, key, exists: true }, 'R2 object exists');
     return true;
   } catch (error) {
-    if (
-      error.name === 'NotFound' ||
-      error.name === 'NoSuchKey' ||
-      error.$metadata?.httpStatusCode === 404
-    ) {
+    if (isNotFound(error)) {
       logger.info({ bucket: bucketName, key, exists: false }, 'R2 object does not exist');
       return false;
     }
@@ -114,5 +135,7 @@ module.exports = {
   getObject,
   putObject,
   deleteObject,
+  headObject,
   ObjectExists,
+  isNotFound,
 };

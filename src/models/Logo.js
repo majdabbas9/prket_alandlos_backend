@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
 const sharp = require('sharp');
 const R2 = require('../cloudManager/R2');
 const logger = require('../utils/logger').getLogger(__filename);
-const cacheManager = require('../utils/cacheManager');
 
 const LOGO_KEY = 'logo/logoImage';
 const LOCAL_LOGO_PATH = path.join(__dirname, '../../uploads/logo/12.jpg');
@@ -125,94 +125,79 @@ class Logo {
   }
 
   /**
-   * Checks if key exists on R2. If not, fetches parket logo image from internet, uploads to R2.
-   * Gets image buffer and metadata (from cache or R2).
-   * @param {string} [key=LOGO_KEY]
-   * @returns {Promise<{buffer: Buffer, contentType: string, metadata: Logo}>}
+   * Loads the default logo image and uploads it to R2 under `key`.
+   * Used the first time the logo is requested and the key is missing.
+   * @param {string} key
+   * @returns {Promise<{buffer: Buffer, width: number, height: number, mimeType: string, size: number}>}
    */
-  static async getImageData(key = LOGO_KEY) {
-    logger.info({ key }, 'Checking logo image data availability');
-    let keyExists = false;
-    if (typeof R2.ObjectExists === 'function') {
-      try {
-        keyExists = await R2.ObjectExists(key);
-      } catch (checkErr) {
-        logger.warn({ err: checkErr, key }, 'Error checking R2 object existence for logo');
-        keyExists = false;
-      }
-    }
+  static async createDefaultImage(key) {
+    logger.info(
+      { key },
+      'Logo image key not found on R2. Creating key with image from internet about parket logo',
+    );
+    const defaultImg = await Logo.downloadOrGenerateParketLogoImage();
+    await R2.putObject(key, defaultImg.buffer, defaultImg.mimeType);
+    return defaultImg;
+  }
 
-    if (!keyExists) {
-      logger.info(
-        { key },
-        'Logo image key not found on R2. Creating key with image from internet about parket logo',
-      );
-      const defaultImg = await Logo.downloadOrGenerateParketLogoImage();
-      await R2.putObject(key, defaultImg.buffer, defaultImg.mimeType);
-
-      const logoModel = new Logo({
-        key,
-        width: defaultImg.width,
-        height: defaultImg.height,
-        mimeType: defaultImg.mimeType,
-        size: defaultImg.size,
-        updatedAt: new Date().toISOString(),
-      });
-
-      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, {
-        buffer: defaultImg.buffer,
-        contentType: defaultImg.mimeType,
-      });
-
-      return {
-        buffer: defaultImg.buffer,
-        contentType: defaultImg.mimeType,
-        metadata: logoModel,
-      };
-    }
-
-    // Key exists on R2 - check cache first
-    const cached = await cacheManager.get(cacheManager.KEYS.LOGO_IMAGE);
-    let buffer;
-    let contentType;
-
-    if (cached) {
-      logger.info({ key }, 'Serving logo image from cache');
-      buffer = cached.buffer;
-      contentType = cached.contentType;
-    } else {
-      logger.info({ key }, 'Retrieving logo image from R2');
+  /**
+   * Opens the logo image on R2 as a stream (bootstrapping a default logo if missing).
+   * @param {string} [key=LOGO_KEY]
+   * @returns {Promise<{body: Readable, contentType: string, contentLength?: number, etag?: string, lastModified?: Date}>}
+   */
+  static async getImage(key = LOGO_KEY) {
+    try {
       const response = await R2.getObject(key);
-      contentType = response.ContentType || 'image/jpeg';
-
-      const chunks = [];
-      for await (const chunk of response.Body) {
-        chunks.push(chunk);
-      }
-      buffer = Buffer.concat(chunks);
-
-      await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType });
-      logger.info(
-        { key, contentType, sizeBytes: buffer.length },
-        'Logo image retrieved from R2 and cached',
-      );
+      return {
+        body: response.Body,
+        contentType: response.ContentType || 'image/jpeg',
+        contentLength: response.ContentLength,
+        etag: response.ETag,
+        lastModified: response.LastModified,
+      };
+    } catch (err) {
+      if (!R2.isNotFound(err)) throw err;
     }
 
-    const logoModel = new Logo({
-      key,
-      mimeType: contentType,
-      size: buffer.length,
-    });
-
+    const defaultImg = await Logo.createDefaultImage(key);
     return {
-      buffer,
-      contentType,
-      metadata: logoModel,
+      body: Readable.from([defaultImg.buffer]),
+      contentType: defaultImg.mimeType,
+      contentLength: defaultImg.size,
     };
   }
 
   /**
-   * Process uploaded logo image file using sharp, upload to R2 and update cache.
+   * Reads logo metadata from R2 without downloading the image
+   * (bootstrapping a default logo if missing).
+   * @param {string} [key=LOGO_KEY]
+   * @returns {Promise<Logo>}
+   */
+  static async getMetadata(key = LOGO_KEY) {
+    try {
+      const head = await R2.headObject(key);
+      return new Logo({
+        key,
+        mimeType: head.ContentType || 'image/jpeg',
+        size: head.ContentLength,
+      });
+    } catch (err) {
+      if (!R2.isNotFound(err)) throw err;
+    }
+
+    const defaultImg = await Logo.createDefaultImage(key);
+    return new Logo({
+      key,
+      width: defaultImg.width,
+      height: defaultImg.height,
+      mimeType: defaultImg.mimeType,
+      size: defaultImg.size,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Process uploaded logo image file using sharp, upload to R2.
    * @param {string} originalFilePath
    * @param {string} [key=LOGO_KEY]
    * @returns {Promise<Logo>}
@@ -235,7 +220,6 @@ class Logo {
     const size = buffer.length;
 
     await R2.putObject(key, buffer, mimeType);
-    await cacheManager.set(cacheManager.KEYS.LOGO_IMAGE, { buffer, contentType: mimeType });
     logger.info(
       { key, width, height, mimeType, size },
       'Logo image processed and updated successfully',

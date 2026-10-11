@@ -1,9 +1,8 @@
 const { createClient } = require('redis');
 const logger = require('./logger').getLogger(__filename);
 
+// Images are not cached here - they stream straight from R2 (see utils/sendImage.js)
 const KEYS = {
-  HOMEPAGE_IMAGE: 'homepage_image',
-  LOGO_IMAGE: 'logo_image',
   STORE_INFO: 'store_info',
   STORE_INFO_AR: 'store_info_ar',
   STORE_INFO_HE: 'store_info_he',
@@ -40,12 +39,7 @@ async function get(key) {
     const value = await redisClient.get(key);
     if (value) {
       logger.info({ cacheKey: key, hit: true }, `Cache hit for key '${key}'`);
-      return JSON.parse(value, (k, v) => {
-        if (v !== null && typeof v === 'object' && v.type === 'Buffer' && Array.isArray(v.data)) {
-          return Buffer.from(v.data);
-        }
-        return v;
-      });
+      return JSON.parse(value);
     } else {
       logger.info({ cacheKey: key, hit: false }, `Cache miss for key '${key}'`);
       return null;
