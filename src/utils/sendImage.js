@@ -10,10 +10,11 @@ const CACHE_CONTROL = 'public, max-age=300';
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {{body: import('stream').Readable, contentType: string, contentLength?: number, etag?: string, lastModified?: Date}} image
+ * @param {string} [cacheControl] overrides the default, e.g. for keys whose content never changes
  */
-function sendImage(req, res, image) {
+function sendImage(req, res, image, cacheControl = CACHE_CONTROL) {
   res.setHeader('Content-Type', image.contentType);
-  res.setHeader('Cache-Control', CACHE_CONTROL);
+  res.setHeader('Cache-Control', cacheControl);
   if (image.etag) res.setHeader('ETag', image.etag);
   if (image.lastModified) res.setHeader('Last-Modified', image.lastModified.toUTCString());
 

@@ -48,7 +48,7 @@ async function getObject(key, bucketName = BUCKET_NAME) {
   }
 }
 
-async function putObject(key, body, contentType, bucketName = BUCKET_NAME) {
+async function putObject(key, body, contentType, bucketName = BUCKET_NAME, cacheControl) {
   const bodySize = Buffer.isBuffer(body) ? body.length : body ? body.length : null;
   logger.info(
     { bucket: bucketName, key, contentType, sizeBytes: bodySize },
@@ -60,6 +60,7 @@ async function putObject(key, body, contentType, bucketName = BUCKET_NAME) {
       Key: key,
       Body: body,
       ContentType: contentType,
+      ...(cacheControl && { CacheControl: cacheControl }),
     });
     const result = await s3Client.send(command);
     logger.info({ bucket: bucketName, key }, 'Successfully uploaded object to R2');

@@ -3,6 +3,7 @@ const logger = require('../utils/logger').getLogger(__filename);
 const Product = require('../models/Product');
 const R2 = require('../cloudManager/R2');
 const cacheManager = require('../utils/cacheManager');
+const sendImage = require('../utils/sendImage');
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
 const PRODUCTS_KEY = 'products/products.json';
@@ -61,6 +62,21 @@ const readProductsData = async () => {
   await cacheManager.set(cacheManager.KEYS.PRODUCTS, products);
   logger.info({ count: products.length }, 'Successfully retrieved products from R2');
   return products;
+};
+
+// Deletes a product's image and thumbnail from R2; failures are logged, never thrown
+const deleteProductImages = async (product) => {
+  const keys = [...new Set([product.imageKey, product.thumbKey].filter(Boolean))];
+  await Promise.all(
+    keys.map(async (key) => {
+      try {
+        await R2.deleteObject(key, BUCKET_NAME);
+        logger.info({ key }, 'Deleted product image from R2');
+      } catch (err) {
+        logger.error({ err, key }, 'Failed to delete product image from R2');
+      }
+    }),
+  );
 };
 
 // Responds 500 when products could not be read from R2
@@ -139,7 +155,7 @@ exports.getAllProducts = async (req, res) => {
       total: products.length,
       page: pageNum,
       totalPages: Math.ceil(products.length / limitNum),
-      data: paginatedProducts,
+      data: paginatedProducts.map(Product.withImageUrls),
     });
   }
 
@@ -147,7 +163,7 @@ exports.getAllProducts = async (req, res) => {
   return res.status(200).json({
     success: true,
     count: products.length,
-    data: products,
+    data: products.map(Product.withImageUrls),
   });
 };
 
@@ -174,7 +190,7 @@ exports.getProductById = async (req, res) => {
   logger.info({ productId: id, title: product.title }, 'Found product by ID');
   return res.status(200).json({
     success: true,
-    data: product,
+    data: Product.withImageUrls(product),
   });
 };
 
@@ -186,10 +202,15 @@ exports.addProduct = async (req, res) => {
   );
   const { title, price, category, description } = req.body;
   let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
+  let thumbKey;
   try {
     // If a file was uploaded via multer
     if (req.file) {
-      imageKey = await Product.uploadImage(req.file.path, req.file.mimetype, req.file.originalname);
+      ({ imageKey, thumbKey } = await Product.uploadImage(
+        req.file.path,
+        req.file.mimetype,
+        req.file.originalname,
+      ));
       logger.info(
         {
           uploadedFile: req.file.filename,
@@ -221,6 +242,7 @@ exports.addProduct = async (req, res) => {
       category,
       description,
       imageKey: imageKey.trim(),
+      thumbKey,
     });
 
     const newProduct = newProductInstance.toJSON();
@@ -237,7 +259,7 @@ exports.addProduct = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'Product added successfully',
-      data: newProduct,
+      data: Product.withImageUrls(newProduct),
     });
   } catch (error) {
     logger.error({ err: error }, 'Error adding product');
@@ -272,13 +294,19 @@ exports.updateProduct = async (req, res) => {
     const existing = products[productIndex];
     const { title, price, category, description } = req.body;
     let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
+    // A new imageKey given without a file has no generated thumbnail
+    let thumbKey = imageKey && imageKey.trim() !== existing.imageKey ? '' : existing.thumbKey;
 
     if (req.file) {
       logger.info(
         { uploadedFile: req.file.filename },
         'Updating product with new image file upload to R2',
       );
-      imageKey = await Product.uploadImage(req.file.path, req.file.mimetype, req.file.originalname);
+      ({ imageKey, thumbKey } = await Product.uploadImage(
+        req.file.path,
+        req.file.mimetype,
+        req.file.originalname,
+      ));
 
       // Clean up local temp file
       try {
@@ -287,18 +315,8 @@ exports.updateProduct = async (req, res) => {
         // Ignore: temp file may already be gone
       }
 
-      // Delete previous image from R2 if it was an R2 key
-      if (existing.imageKey) {
-        try {
-          await R2.deleteObject(existing.imageKey, BUCKET_NAME);
-          logger.info({ prevKey: existing.imageKey }, 'Deleted previous product image from R2');
-        } catch (delErr) {
-          logger.error(
-            { err: delErr, prevKey: existing.imageKey },
-            'Error deleting previous product image from R2',
-          );
-        }
-      }
+      // Delete previous image and thumbnail from R2
+      await deleteProductImages(existing);
     }
 
     const updatedProduct = new Product({
@@ -308,6 +326,7 @@ exports.updateProduct = async (req, res) => {
       category: category !== undefined ? category : existing.category,
       description: description !== undefined ? description : existing.description,
       imageKey: imageKey ? imageKey.trim() : existing.imageKey,
+      thumbKey,
       updatedAt: new Date().toISOString(),
     }).toJSON();
 
@@ -318,7 +337,7 @@ exports.updateProduct = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: updatedProduct,
+      data: Product.withImageUrls(updatedProduct),
     });
   } catch (error) {
     logger.error({ err: error }, 'Error updating product');
@@ -349,18 +368,7 @@ exports.deleteProduct = async (req, res) => {
   const deletedProduct = products[productIndex];
 
   try {
-    // Delete image from R2 if present
-    if (deletedProduct.imageKey) {
-      try {
-        await R2.deleteObject(deletedProduct.imageKey, BUCKET_NAME);
-        logger.info({ key: deletedProduct.imageKey }, 'Deleted product image from R2');
-      } catch (err) {
-        logger.error(
-          { err, key: deletedProduct.imageKey },
-          'Failed to delete product image from R2',
-        );
-      }
-    }
+    await deleteProductImages(deletedProduct);
 
     products.splice(productIndex, 1);
     await saveProductsData(products);
@@ -390,22 +398,32 @@ exports.getPhotoByUrl = async (req, res) => {
     });
   }
   logger.info({ key: targetUrl }, 'Fetching image from R2');
+  let response;
   try {
-    const response = await R2.getObject(targetUrl, BUCKET_NAME);
-    const contentType = response.ContentType || 'image/jpeg';
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-
-    // Stream the S3 readable stream to express response
-    response.Body.pipe(res);
-    logger.info({ key: targetUrl, contentType }, 'Successfully streaming image from R2');
-    return;
+    response = await R2.getObject(targetUrl, BUCKET_NAME);
   } catch (error) {
-    logger.error({ err: error, key: targetUrl }, 'Failed to fetch image from R2');
+    if (!R2.isNotFound(error)) {
+      logger.error({ err: error, key: targetUrl }, 'Failed to fetch image from R2');
+      return res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+    logger.warn({ key: targetUrl }, 'Product image not found in R2');
     return res.status(404).json({
       success: false,
       error: 'Image not found in storage',
     });
   }
+
+  // Product image keys are unique per upload, so the browser can keep them for good
+  return sendImage(
+    req,
+    res,
+    {
+      body: response.Body,
+      contentType: response.ContentType || 'image/jpeg',
+      contentLength: response.ContentLength,
+      etag: response.ETag,
+      lastModified: response.LastModified,
+    },
+    Product.IMMUTABLE_CACHE_CONTROL,
+  );
 };
