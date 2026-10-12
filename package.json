@@ -13,6 +13,7 @@
     "perf:products-paginated": "node perf/load-test.js --endpoint \"products paginated\"",
     "perf:products-search": "node perf/load-test.js --endpoint \"products search\"",
     "perf:product-by-id": "node perf/load-test.js --endpoint \"product by id\"",
+    "perf:product-photo": "node perf/load-test.js --endpoint \"product photo\"",
     "perf:info-en": "node perf/load-test.js --endpoint \"info (en)\"",
     "perf:info-ar": "node perf/load-test.js --endpoint \"info (ar)\"",
     "perf:info-he": "node perf/load-test.js --endpoint \"info (he)\"",

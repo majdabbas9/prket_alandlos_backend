@@ -6,15 +6,15 @@
  *
  * Usage:
  *   npm run perf
- *   BASE_URL=http://localhost:8080 REQUESTS=100 CONCURRENCY=20 npm run perf
+ *   BASE_URL=http://localhost:8080 REQUESTS=100 CONCURRENCY=100 npm run perf
  *   npm run perf -- --endpoint "homepage image"   # one endpoint, by name
  *   npm run perf -- --endpoint /api/info?lang=ar  # one endpoint, by path
  *   npm run perf -- --list                        # list endpoint names
  *
  * Env vars:
  *   BASE_URL      target API (default: the deployed Cloudflare worker)
- *   REQUESTS      requests per endpoint (default 50)
- *   CONCURRENCY   parallel in-flight requests per endpoint (default 10)
+ *   REQUESTS      requests per endpoint (default 100)
+ *   CONCURRENCY   parallel in-flight requests per endpoint (default 100)
  *   WARMUP        warm-up requests per endpoint, not measured (default 2)
  *   TIMEOUT_MS    per-request timeout (default 10000)
  *   MAX_P95_MS    fail if any endpoint's p95 exceeds this (default 2000)
@@ -24,8 +24,8 @@
 const BASE_URL = (
   process.env.BASE_URL || 'https://prket-alandlos-api.majd-abbas222.workers.dev'
 ).replace(/\/+$/, '');
-const REQUESTS = parseInt(process.env.REQUESTS, 10) || 50;
-const CONCURRENCY = parseInt(process.env.CONCURRENCY, 10) || 10;
+const REQUESTS = 10;
+const CONCURRENCY = 10;
 const WARMUP = process.env.WARMUP !== undefined ? parseInt(process.env.WARMUP, 10) : 2;
 const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS, 10) || 10000;
 const MAX_P95_MS = parseInt(process.env.MAX_P95_MS, 10) || 2000;
@@ -37,6 +37,7 @@ const ENDPOINTS = [
   { name: 'products paginated', path: '/api/products?page=1&limit=10' },
   { name: 'products search', path: '/api/products?search=parquet&sort=newest' },
   { name: 'product by id', path: '/api/products/:id' },
+  { name: 'product photo', path: '/api/products/photo?key=:imageKey' },
   { name: 'info (en)', path: '/api/info?lang=en' },
   { name: 'info (ar)', path: '/api/info?lang=ar' },
   { name: 'info (he)', path: '/api/info?lang=he' },
@@ -107,16 +108,18 @@ async function runEndpoint({ name, path, expectStatus }) {
   };
 }
 
-async function resolveProductId() {
+// Values for the :id / :imageKey path placeholders, taken from the live catalog
+async function resolvePlaceholders() {
   try {
-    const res = await fetch(`${BASE_URL}/api/products?limit=1`, {
+    const res = await fetch(`${BASE_URL}/api/products`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const data = await res.json();
     const list = Array.isArray(data) ? data : data.products || data.data || data.items || [];
-    return list[0] && list[0].id;
+    const withImage = list.find((p) => p.imageKey);
+    return { id: list[0] && list[0].id, imageKey: withImage && withImage.imageKey };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -240,15 +243,16 @@ async function main() {
     ),
   );
 
-  const needsId = selected.some((e) => e.path.includes(':id'));
-  const productId = needsId ? await resolveProductId() : undefined;
+  const PLACEHOLDER = /:(id|imageKey)\b/g;
+  const needsLookup = selected.some((e) => e.path.match(PLACEHOLDER));
+  const values = needsLookup ? await resolvePlaceholders() : {};
   const endpoints = selected.filter((e) => {
-    if (!e.path.includes(':id')) return true;
-    if (productId === undefined) {
-      console.log(`(skipping "${e.name}": no products found)\n`);
+    const missing = (e.path.match(PLACEHOLDER) || []).filter((m) => !values[m.slice(1)]);
+    if (missing.length) {
+      console.log(`(skipping "${e.name}": no product with ${missing.join(', ')} found)\n`);
       return false;
     }
-    e.path = e.path.replace(':id', encodeURIComponent(productId));
+    e.path = e.path.replace(PLACEHOLDER, (m) => encodeURIComponent(values[m.slice(1)]));
     return true;
   });
 
