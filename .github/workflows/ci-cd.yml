@@ -282,6 +282,18 @@ jobs:
           ACCESS_KEY_ID: ${{ secrets[format('{0}_ACCESS_KEY_ID', matrix.prefix)] }}
           SECRET_ACCESS_KEY: ${{ secrets[format('{0}_SECRET_ACCESS_KEY', matrix.prefix)] }}
 
+      # The backend validates tokens on the admin backend (AUTH_URL) and the integration tests
+      # log in there, so wait until it answers (it may be deploying / cold-starting too).
+      - name: Wait for the admin backend
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -sf --max-time 10 -o /dev/null "$AUTH_URL/health"; then
+              echo "Admin backend is up at $AUTH_URL"; exit 0
+            fi
+            sleep 5
+          done
+          echo "Admin backend at $AUTH_URL/health not available after 5 min"; exit 1
+
   it:
     needs: deploy
     uses: ./.github/workflows/integration-tests.yml
