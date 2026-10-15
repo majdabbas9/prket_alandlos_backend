@@ -1,11 +1,15 @@
 // Shared helpers for the post-deploy integration tests (it/*.test.mjs). They run against the
 // live API Worker, using only Node built-ins (node:test + fetch), so no npm install. Run by
 // .github/workflows/integration-tests.yml after each publish run deploys to dev.
-//   API_URL                          Worker URL (default: the dev workers.dev URL)
+//   API_URL                          backend Worker URL (default: dev's workers.dev URL)
+//   AUTH_URL                         admin backend Worker URL, for logging in (default: dev's)
 //   ADMIN_USERNAME / ADMIN_PASSWORD  admin credentials; tests that need a token skip without them
 
 export const API_URL = (
-  process.env.API_URL || 'https://prket-alandlos-api.majd-abbas222.workers.dev'
+  process.env.API_URL || 'https://prket-alandlos-backend.majd-abbas222.workers.dev'
+).replace(/\/+$/, '');
+export const AUTH_URL = (
+  process.env.AUTH_URL || 'https://prket-alandlos-auth.majd-abbas222.workers.dev'
 ).replace(/\/+$/, '');
 export const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -13,15 +17,15 @@ export const hasCredentials = Boolean(ADMIN_USERNAME && ADMIN_PASSWORD);
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
-/** fetch against API_URL; returns { status, headers, body } with body parsed as JSON when it is JSON. */
-export async function request(method, path, { body, token, headers = {} } = {}) {
+/** fetch against API_URL (or baseUrl); returns { status, headers, body } with body parsed as JSON when it is JSON. */
+export async function request(method, path, { body, token, headers = {}, baseUrl = API_URL } = {}) {
   const init = { method, headers: { ...headers }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) };
   if (token) init.headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(`${API_URL}${path}`, init);
+  const res = await fetch(`${baseUrl}${path}`, init);
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   return {
     status: res.status,
@@ -56,9 +60,10 @@ export async function waitUntilReady(method, path, isReady, { timeoutMs = 240_00
   throw new Error(`${method} ${path} not ready after ${timeoutMs / 1000}s (last: ${last})`);
 }
 
-/** Logs in as the admin and returns the JWT. */
+/** Logs in as the admin (on the admin backend Worker) and returns the JWT. */
 export async function login() {
   const res = await request('POST', '/auth/login', {
+    baseUrl: AUTH_URL,
     body: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD },
   });
   if (res.status !== 200 || !res.body?.token) {

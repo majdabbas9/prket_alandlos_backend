@@ -50,17 +50,18 @@ jobs:
         with:
           node-version: 22
 
-      - name: Resolve API URL
+      # AUTH_URL: the tests log in on the admin backend's Worker
+      - name: Resolve API URLs
         run: |
           node .infra/scripts/env-config.mjs > "$RUNNER_TEMP/config"
-          sed -n 's/^api_url=/API_URL=/p' "$RUNNER_TEMP/config" >> "$GITHUB_ENV"
+          sed -n 's/^api_url=/API_URL=/p; s/^auth_url=/AUTH_URL=/p' "$RUNNER_TEMP/config" >> "$GITHUB_ENV"
         env:
           VARS_JSON: ${{ toJSON(vars) }}
           CLOUDFLARE_API_TOKEN: ${{ secrets[format('{0}_CLOUDFLARE_API_TOKEN', env.PREFIX)] }}
 
       - name: Run integration tests
         run: |
-          echo "Testing $API_URL"
+          echo "Testing $API_URL (login on $AUTH_URL)"
           node --test --test-reporter=spec --test-reporter-destination=stdout it/backend.test.mjs
         env:
           ADMIN_USERNAME: ${{ secrets[format('{0}_ADMIN_USERNAME', env.PREFIX)] || secrets.ADMIN_USERNAME }}
