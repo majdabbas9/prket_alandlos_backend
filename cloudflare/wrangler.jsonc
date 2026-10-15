@@ -1,0 +1,49 @@
+// The backend's Worker on Cloudflare Containers (api.<domain>).
+//   GET /api/products/photo?key=products/... -> served by this Worker from R2 (BUCKET binding)
+//   anything else -> the Backend container (port 8080)
+// The container's cache is Workers KV (CACHE), reached through cache.internal (src/index.ts).
+// Admin tokens are validated by the admin backend's own Worker (AUTH_URL).
+// Sized from `docker stats` on the local stack: idle ~90 MiB, peak ~135 MiB under load,
+// ~1 core burst while sharp resizes 10 MB uploads -> basic.
+//
+// Deployed by .github/workflows/ci-cd.yml (deploy job), once per environment: CI writes a copy
+// (wrangler.ci.json) with that environment's names from prket_alandlos_infra's
+// scripts/env-config.mjs - the values below are dev's - plus:
+//   image          registry.cloudflare.com/<account id>/<this name>:sha-<commit> (pushed by CI)
+//   instance_type  <ENV>_BACKEND_INSTANCE or the run's `instance` input, if set
+//   CACHE id       the KV namespace prket_alandlos_infra's Provision created
+//   vars           R2_PUBLIC_URL (when the env has a public bucket domain) and AUTH_URL
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "prket-alandlos-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // The custom API domain (api.<domain>) is passed by CI (`wrangler deploy --domain`);
+  // workers.dev stays on so the default URL keeps working.
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "containers": [
+    {
+      "class_name": "Backend",
+      "image": "prket-alandlos-backend",
+      "instance_type": "basic", // 1/4 vCPU, 1 GiB RAM, 4 GB disk
+      // Single instance: every product write rewrites the whole products.json in R2, so
+      // two instances writing at once could drop each other's change.
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "BACKEND", "class_name": "Backend" }]
+  },
+  "kv_namespaces": [{ "binding": "CACHE" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "prket-andlos" }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Backend"] }],
+  "vars": {
+    "R2_BUCKET_NAME": "prket-andlos"
+  }
+  // Secrets (set by CI via `wrangler secret bulk`):
+  //   ACCESS_KEY_ID, SECRET_ACCESS_KEY, CLOUDFLARE_ACCOUNT_ID
+}

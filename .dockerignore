@@ -7,3 +7,6 @@ tests
 README.md
 Dockerfile
 .dockerignore
+
+# Worker code for Cloudflare (deployed separately, not part of the image)
+cloudflare

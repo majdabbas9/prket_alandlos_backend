@@ -7,7 +7,7 @@
  *
  * Uses the R2 credentials from .env - that is the production bucket. Original images are left
  * in R2 (their keys are printed) so nothing a running client still references disappears.
- * Afterwards the Redis `products` key is refreshed if Redis is reachable at REDIS_URL.
+ * Afterwards the `products` cache key is refreshed if the cache is reachable (CACHE_URL or REDIS_URL).
  */
 require('dotenv').config();
 const R2 = require('../src/cloudManager/R2');
@@ -86,11 +86,11 @@ async function main() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 5000)),
     ]);
     await cacheManager.set(cacheManager.KEYS.PRODUCTS, latest);
-    console.log('Refreshed Redis products cache');
-    await cacheManager.getClient().quit();
+    console.log('Refreshed products cache');
+    await cacheManager.close();
   } catch (err) {
     console.warn(
-      `Could not refresh Redis (${err.message}) - delete the "products" key or restart Redis`,
+      `Could not refresh the cache (${err.message}) - delete its "products" key or restart Redis`,
     );
   }
 }
