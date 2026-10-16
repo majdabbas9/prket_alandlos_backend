@@ -3,6 +3,8 @@ const Homepage = require('../models/Homepage');
 const sendImage = require('../utils/sendImage');
 const logger = require('../utils/logger').getLogger(__filename);
 
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+
 // Local variable to store current homepage model instance in memory
 let currentHomepage = new Homepage();
 
@@ -22,6 +24,8 @@ exports.getHomepageImage = async (req, res) => {
       if (!metadata) return notFound(res);
       currentHomepage = metadata;
       logger.info({ key: currentHomepage.key }, 'Returning homepage image JSON metadata to client');
+      // Clients read the current version from here, so it must never be served stale
+      res.setHeader('Cache-Control', 'no-cache');
       return res.status(200).json({
         success: true,
         data: currentHomepage.toJSON(),
@@ -34,7 +38,8 @@ exports.getHomepageImage = async (req, res) => {
       { contentType: image.contentType, sizeBytes: image.contentLength },
       'Streaming homepage image from R2',
     );
-    return sendImage(req, res, image);
+    // A versioned URL (?v=<etag>) points at exactly one upload, so it can be cached for good
+    return req.query.v ? sendImage(req, res, image, IMMUTABLE) : sendImage(req, res, image);
   } catch (error) {
     logger.error({ err: error }, 'Error fetching/serving homepage image');
     return res.status(500).json({

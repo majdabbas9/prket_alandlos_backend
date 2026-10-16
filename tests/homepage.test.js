@@ -23,13 +23,18 @@ jest.mock('../src/cloudManager/R2', () => {
   });
   const headObject = jest.fn(async (key) => {
     if (mockStorage.has(key)) {
-      return { ContentType: 'image/png', ContentLength: mockStorage.get(key).length };
+      return {
+        ContentType: 'image/png',
+        ContentLength: mockStorage.get(key).length,
+        ETag: `"etag-${mockStorage.get(key).length}"`,
+        LastModified: new Date('2026-01-01T00:00:00Z'),
+      };
     }
     throw notFound();
   });
   const putObject = jest.fn(async (key, body) => {
     mockStorage.set(key, body);
-    return { success: true };
+    return { ETag: `"etag-${body.length}"` };
   });
   const deleteObject = jest.fn(async (key) => {
     mockStorage.delete(key);
@@ -133,6 +138,21 @@ describe('Homepage Image API Endpoints', () => {
       expect(R2.getObject).not.toHaveBeenCalled();
     });
 
+    it('should expose a version for cache-busting and never let the metadata go stale', async () => {
+      const res = await request(app).get('/api/homepage-image?info=true');
+      expect(res.headers['cache-control']).toBe('no-cache');
+      expect(res.body.data.version).toBe(
+        `etag-${mockStorage.get('homePage/homepageImage').length}`,
+      );
+      expect(res.body.data.updatedAt).toBe('2026-01-01T00:00:00.000Z');
+    });
+
+    it('should cache a versioned image URL for good', async () => {
+      const res = await request(app).get('/api/homepage-image?v=etag-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    });
+
     it('should return 404 without creating anything when the image is missing on R2', async () => {
       const R2 = require('../src/cloudManager/R2');
       const saved = mockStorage.get('homePage/homepageImage');
@@ -159,6 +179,18 @@ describe('Homepage Image API Endpoints', () => {
       expect(res.body.data.key).toBe('homePage/homepageImage');
       expect(res.body.data.width).toBe(1600);
       expect(res.body.data.height).toBe(800); // 2400x1200 scaled to width 1600 maintains 2:1 aspect ratio
+      // A new upload gets a new version, so versioned URLs of the old image stop matching
+      expect(res.body.data.version).toBe(
+        `etag-${mockStorage.get('homePage/homepageImage').length}`,
+      );
+      const R2 = require('../src/cloudManager/R2');
+      expect(R2.putObject).toHaveBeenLastCalledWith(
+        'homePage/homepageImage',
+        expect.any(Buffer),
+        'image/png',
+        undefined,
+        'public, max-age=300',
+      );
 
       // Verify the uploaded file actually exists in mocked R2 storage and is retrievable via GET
       const getRes = await request(app).get('/api/homepage-image');

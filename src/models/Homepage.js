@@ -3,6 +3,12 @@ const R2 = require('../cloudManager/R2');
 const logger = require('../utils/logger').getLogger(__filename);
 
 const HOMEPAGE_KEY = 'homePage/homepageImage';
+// The key never changes, so browsers/CDNs must revalidate it soon; clients that want to cache
+// longer load it with ?v=<version>, which changes on every upload
+const HOMEPAGE_CACHE_CONTROL = 'public, max-age=300';
+
+// R2 ETags come quoted; strip the quotes so the value is safe in a query string
+const toVersion = (etag) => (etag ? etag.replace(/"/g, '') : null);
 const DEFAULT_PARKET_IMAGE_URL =
   'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1600&auto=format&fit=crop';
 
@@ -22,6 +28,7 @@ class Homepage {
     this.height = merged.height || 1067;
     this.mimeType = merged.mimeType || 'image/jpeg';
     this.size = merged.size !== undefined ? merged.size : null;
+    this.version = merged.version || null;
     this.updatedAt = merged.updatedAt || new Date().toISOString();
   }
 
@@ -147,6 +154,8 @@ class Homepage {
         key,
         mimeType: head.ContentType || 'image/jpeg',
         size: head.ContentLength,
+        version: toVersion(head.ETag),
+        ...(head.LastModified && { updatedAt: head.LastModified.toISOString() }),
       });
     } catch (err) {
       if (!R2.isNotFound(err)) throw err;
@@ -186,9 +195,10 @@ class Homepage {
     const mimeType = `image/${processedMeta.format || 'jpeg'}`;
     const size = buffer.length;
 
-    await R2.putObject(key, buffer, mimeType);
+    const result = await R2.putObject(key, buffer, mimeType, undefined, HOMEPAGE_CACHE_CONTROL);
+    const version = toVersion(result?.ETag);
     logger.info(
-      { key, width, height, mimeType, size },
+      { key, width, height, mimeType, size, version },
       'Homepage image processed and updated successfully',
     );
     return new Homepage({
@@ -197,6 +207,7 @@ class Homepage {
       height,
       mimeType,
       size,
+      version,
       updatedAt: new Date().toISOString(),
     });
   }
@@ -212,6 +223,7 @@ class Homepage {
       height: this.height,
       mimeType: this.mimeType,
       size: this.size,
+      version: this.version,
       updatedAt: this.updatedAt,
     };
   }
