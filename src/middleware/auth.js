@@ -3,8 +3,9 @@
 const ADMIN_BACKEND_URL = process.env.ADMIN_BACKEND_URL || 'http://localhost:5001';
 
 async function authMiddleware(req, res, next) {
-  // Bypass validation in test environment to make sure existing test cases pass
-  if (process.env.NODE_ENV === 'test') {
+  // Bypass validation in unit tests only: JEST_WORKER_ID is set by Jest itself, so a deployment
+  // that is misconfigured with NODE_ENV=test still checks tokens
+  if (process.env.NODE_ENV === 'test' && process.env.JEST_WORKER_ID !== undefined) {
     req.user = { username: 'test-admin', role: 'admin' };
     return next();
   }
@@ -38,6 +39,12 @@ async function authMiddleware(req, res, next) {
         success: false,
         error: result.message || 'Invalid authorization token',
       });
+    }
+
+    // Every write route is admin-only; a valid token for any other role is not enough
+    if (!result.data || result.data.role !== 'admin') {
+      logger.warn({ user: result.data && result.data.username }, 'Auth failed: not an admin');
+      return res.status(403).json({ success: false, error: 'Admin access required' });
     }
 
     // Attach decoded user info to request

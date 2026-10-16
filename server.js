@@ -6,6 +6,12 @@ const { ensureDefaults } = require('./src/utils/ensureDefaults');
 
 const PORT = process.env.PORT || 8080;
 
+// Express 4 doesn't catch errors thrown in async handlers, and on Node 20 an unhandled rejection
+// exits the process - so one bad request could take the whole API down. Log it and keep serving.
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled promise rejection');
+});
+
 // Start Server
 async function startServer() {
   try {

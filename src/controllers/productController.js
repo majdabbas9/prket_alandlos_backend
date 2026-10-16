@@ -2,6 +2,7 @@ const fs = require('fs');
 const logger = require('../utils/logger').getLogger(__filename);
 const Product = require('../models/Product');
 const R2 = require('../cloudManager/R2');
+const { isProductImageKey } = require('../utils/imageKeys');
 const cacheManager = require('../utils/cacheManager');
 const sendImage = require('../utils/sendImage');
 
@@ -85,6 +86,27 @@ const deleteProductImages = async (product) => {
   );
 };
 
+// Multer temp files live in uploads/; remove them whether or not the upload to R2 succeeded
+const removeTempUpload = (file) => {
+  if (!file) return;
+  try {
+    fs.unlinkSync(file.path);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      logger.warn({ err, path: file.path }, 'Failed to delete temp local upload file');
+    }
+  }
+};
+
+// Client-supplied keys may only point at product images (they are later deleted with the product)
+const invalidImageKey = (res, imageKey) => {
+  logger.warn({ imageKey }, 'Rejected image key outside products/');
+  return res.status(400).json({
+    success: false,
+    error: 'imageKey must be a product image key (products/<name>.webp|jpg|png|gif|avif)',
+  });
+};
+
 // Responds 500 when products could not be read from R2
 const handleReadError = (res, error) => {
   logger.error({ err: error }, 'Error reading products data');
@@ -102,6 +124,19 @@ exports.getAllProducts = async (req, res) => {
   }
 
   const { search, category, sort = 'newest', page, limit } = req.query;
+
+  // Repeated or bracketed params (?search=a&search=b, ?category[x]=1) parse as arrays/objects;
+  // calling string methods on them would throw outside any try/catch and crash the process
+  if (
+    (search !== undefined && typeof search !== 'string') ||
+    (category !== undefined && typeof category !== 'string')
+  ) {
+    logger.warn({ query: req.query }, 'Rejected non-string search/category query parameter');
+    return res.status(400).json({
+      success: false,
+      error: 'The "search" and "category" query parameters must be single strings',
+    });
+  }
 
   // Filter by search query (title, description, category)
   if (search) {
@@ -209,6 +244,13 @@ exports.addProduct = async (req, res) => {
   const { title, price, category, description } = req.body;
   let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
   let thumbKey;
+  if (
+    !req.file &&
+    imageKey !== undefined &&
+    (typeof imageKey !== 'string' || !isProductImageKey(imageKey.trim()))
+  ) {
+    return invalidImageKey(res, imageKey);
+  }
   try {
     // If a file was uploaded via multer
     if (req.file) {
@@ -225,12 +267,6 @@ exports.addProduct = async (req, res) => {
         },
         'Processing uploaded product image file',
       );
-      // Cleanup local temp file since it's uploaded to R2
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        logger.warn({ err: e, path: req.file.path }, 'Failed to delete temp local upload file');
-      }
     }
 
     if (!imageKey || typeof imageKey !== 'string' || !imageKey.trim()) {
@@ -269,8 +305,11 @@ exports.addProduct = async (req, res) => {
       data: Product.withImageUrls(newProduct),
     });
   } catch (error) {
+    if (error.status === 400) return res.status(400).json({ success: false, error: error.message });
     logger.error({ err: error }, 'Error adding product');
     return res.status(500).json({ success: false, error: 'Internal Server Error' });
+  } finally {
+    removeTempUpload(req.file);
   }
 };
 
@@ -285,11 +324,13 @@ exports.updateProduct = async (req, res) => {
   try {
     products = await readProductsData();
   } catch (error) {
+    removeTempUpload(req.file);
     return handleReadError(res, error);
   }
   const productIndex = products.findIndex((p) => p.id === id);
 
   if (productIndex === -1) {
+    removeTempUpload(req.file);
     logger.warn({ productId: id }, 'Product update failed: product not found');
     return res.status(404).json({
       success: false,
@@ -301,6 +342,13 @@ exports.updateProduct = async (req, res) => {
     const existing = products[productIndex];
     const { title, price, category, description } = req.body;
     let imageKey = req.body ? req.body.imageKey || req.body.imageUrl || req.body.image : undefined;
+    if (
+      !req.file &&
+      imageKey !== undefined &&
+      (typeof imageKey !== 'string' || !isProductImageKey(imageKey.trim()))
+    ) {
+      return invalidImageKey(res, imageKey);
+    }
     // A new imageKey given without a file has no generated thumbnail
     let thumbKey = imageKey && imageKey.trim() !== existing.imageKey ? '' : existing.thumbKey;
 
@@ -314,13 +362,6 @@ exports.updateProduct = async (req, res) => {
         req.file.mimetype,
         req.file.originalname,
       ));
-
-      // Clean up local temp file
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch {
-        // Ignore: temp file may already be gone
-      }
 
       // Delete previous image and thumbnail from R2
       await deleteProductImages(existing);
@@ -348,8 +389,11 @@ exports.updateProduct = async (req, res) => {
       data: Product.withImageUrls(updatedProduct),
     });
   } catch (error) {
+    if (error.status === 400) return res.status(400).json({ success: false, error: error.message });
     logger.error({ err: error }, 'Error updating product');
     return res.status(500).json({ success: false, error: 'Internal Server Error' });
+  } finally {
+    removeTempUpload(req.file);
   }
 };
 
@@ -398,8 +442,9 @@ exports.getPhotoByUrl = async (req, res) => {
   const targetUrl = req.query.url || req.query.key;
   logger.info({ targetUrl }, 'GET /api/products/photo - Proxying/serving product photo');
 
-  if (!targetUrl || typeof targetUrl !== 'string') {
-    logger.warn('Product photo request missing valid url parameter');
+  // Only product images: without this, any object in the bucket could be read by key
+  if (!isProductImageKey(targetUrl)) {
+    logger.warn({ targetUrl }, 'Product photo request without a valid product image key');
     return res.status(400).json({
       success: false,
       error: 'A valid "url" or "key" query parameter is required',

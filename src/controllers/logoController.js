@@ -39,7 +39,7 @@ exports.getLogo = async (req, res) => {
     logger.error({ err: error }, 'Error fetching/serving logo');
     return res.status(500).json({
       success: false,
-      error: 'Failed to retrieve or initialize logo: ' + error.message,
+      error: 'Failed to retrieve or initialize logo',
     });
   }
 };
@@ -74,18 +74,16 @@ exports.updateLogo = async (req, res) => {
     if (uploadedFile) {
       const originalFilePath = uploadedFile.path;
       logger.info({ originalFilePath }, 'Updating logo with uploaded file');
-      const updatedLogo = await Logo.updateImage(originalFilePath, currentLogo.key);
-      currentLogo = updatedLogo;
-
-      if (fs.existsSync(originalFilePath)) {
+      try {
+        currentLogo = await Logo.updateImage(originalFilePath, currentLogo.key);
+      } finally {
+        // Clean up the temp upload even when processing fails, so it never lingers in uploads/
         try {
           fs.unlinkSync(originalFilePath);
-          logger.info({ originalFilePath }, 'Successfully cleaned up temporary logo upload file');
-        } catch (unlinkErr) {
-          logger.error(
-            { err: unlinkErr, originalFilePath },
-            'Error removing temp logo upload file',
-          );
+        } catch (err) {
+          if (err.code !== 'ENOENT') {
+            logger.error({ err, originalFilePath }, 'Error removing temp logo upload file');
+          }
         }
       }
     } else if (req.body && (req.body.logoUrl || req.body.imageUrl)) {
@@ -108,7 +106,7 @@ exports.updateLogo = async (req, res) => {
     logger.error({ err: error }, 'Error updating logo image');
     return res.status(500).json({
       success: false,
-      error: 'Failed to process and update logo image: ' + error.message,
+      error: 'Failed to process and update logo image',
     });
   }
 };

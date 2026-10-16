@@ -33,13 +33,14 @@ const WRITE_ROUTES = [
   ['post', '/api/logo-image'],
 ];
 
-// Fake admin backend: only the token "good" is valid
+// Fake admin backend: "good" is an admin's token, "viewer" a valid token for a non-admin role
 const adminBackend = jest.fn(async (url, { headers }) => {
-  const ok = headers.Authorization === 'Bearer good';
+  const role = { 'Bearer good': 'admin', 'Bearer viewer': 'viewer' }[headers.Authorization];
+  const ok = Boolean(role);
   return new Response(
     JSON.stringify(
       ok
-        ? { success: true, data: { username: 'admin', role: 'admin' } }
+        ? { success: true, data: { username: 'someone', role } }
         : { success: false, message: 'Invalid token' },
     ),
     { status: ok ? 200 : 401, headers: { 'Content-Type': 'application/json' } },
@@ -98,6 +99,28 @@ describe('auth middleware (NODE_ENV != test)', () => {
     expect(url).toBe(VALIDATE_URL);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ token: 'good' });
+  });
+
+  it.each(WRITE_ROUTES)(
+    '%s %s returns 403 for a valid token without the admin role',
+    async (method, path) => {
+      const res = await request(app)[method](path).set('Authorization', 'Bearer viewer').send({});
+      expect(res.statusCode).toBe(403);
+      expect(R2.putObject).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still checks tokens when NODE_ENV is test outside Jest', async () => {
+    process.env.NODE_ENV = 'test';
+    const workerId = process.env.JEST_WORKER_ID;
+    delete process.env.JEST_WORKER_ID;
+    try {
+      const res = await request(app).post('/api/info').send({});
+      expect(res.statusCode).toBe(401);
+    } finally {
+      process.env.JEST_WORKER_ID = workerId;
+      process.env.NODE_ENV = 'development';
+    }
   });
 
   it('returns 500 (not 200) when the admin backend is unreachable', async () => {

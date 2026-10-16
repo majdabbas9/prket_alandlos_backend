@@ -145,6 +145,17 @@ describe('GET /api/products (listing, filters, sorting, pagination)', () => {
     expect(partial.body.count).toBe(0);
   });
 
+  it.each([
+    ['a repeated search', '?search=a&search=b'],
+    ['a repeated category', '?category=a&category=b'],
+    ['an object category', '?category[x]=1'],
+    ['an object search', '?search[$ne]=1'],
+  ])('rejects %s with 400 instead of crashing', async (_label, query) => {
+    const res = await request(app).get(`/api/products${query}`);
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
   it('combines search and category', async () => {
     const res = await request(app).get('/api/products?search=oak&category=Tiles');
     expect(ids(res)).toEqual(['p-tile']);
@@ -291,19 +302,52 @@ describe('POST /api/products', () => {
     expect(large.width).toBe(300);
   });
 
-  it('stores an image sharp cannot decode as-is, used for both variants', async () => {
+  it('rejects a file sharp cannot decode with 400 and stores nothing', async () => {
     const raw = Buffer.from('not really an image');
+    const before = new Set(mockStorage.keys());
     const res = await request(app)
       .post('/api/products')
       .field('title', 'Undecodable')
       .attach('image', raw, 'odd.gif');
 
-    expect(res.statusCode).toEqual(201);
-    const { imageKey, thumbKey } = res.body.data;
-    expect(imageKey).toMatch(/^products\/img-.*\.gif$/);
-    expect(thumbKey).toBe(imageKey);
-    expect(mockStorage.get(imageKey).equals(raw)).toBe(true);
+    expect(res.statusCode).toEqual(400);
+    expect([...mockStorage.keys()].filter((k) => !before.has(k))).toEqual([]);
     expect(tempUploads()).toEqual([]);
+  });
+
+  it('rejects an SVG upload (it could carry script)', async () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    );
+    const res = await request(app)
+      .post('/api/products')
+      .field('title', 'SVG')
+      .attach('image', svg, { filename: 'x.svg', contentType: 'image/svg+xml' });
+
+    expect(res.statusCode).toEqual(400);
+    expect(tempUploads()).toEqual([]);
+  });
+
+  it('rejects a file whose name only contains an image extension', async () => {
+    const res = await request(app)
+      .post('/api/products')
+      .field('title', 'Sneaky')
+      .attach('image', Buffer.from('<html></html>'), {
+        filename: 'x.jpg.html',
+        contentType: 'text/html; image/jpeg',
+      });
+    expect(res.statusCode).toEqual(400);
+  });
+
+  it.each([
+    'products/products.json',
+    'info/info.json',
+    'logo/logoImage',
+    'products/../info/info.json',
+    'products/sub/x.webp',
+  ])('rejects imageKey %p outside product images with 400', async (imageKey) => {
+    const res = await request(app).post('/api/products').send({ title: 'Bad key', imageKey });
+    expect(res.statusCode).toEqual(400);
   });
 
   it('rejects an upload under an unknown field with 400', async () => {
@@ -342,6 +386,12 @@ describe('POST /api/products', () => {
 });
 
 describe('PUT /api/products/:id', () => {
+  it('rejects an imageKey outside product images, so a later delete cannot remove it', async () => {
+    const res = await request(app).put('/api/products/p-oak').send({ imageKey: 'info/info.json' });
+    expect(res.statusCode).toEqual(400);
+    expect(storedProducts()[0]).toEqual(CATALOG[0]);
+  });
+
   it('updates only the sent fields and stamps updatedAt', async () => {
     const res = await request(app).put('/api/products/p-oak').send({ price: '50' });
 
@@ -533,6 +583,22 @@ describe('GET /api/products/photo', () => {
     const res = await request(app).get('/api/products/photo?key=products/a.webp');
     expect(res.statusCode).toEqual(500);
   });
+
+  it('serves photos with nosniff and a sandboxing CSP', async () => {
+    mockStorage.set('products/a.webp', Buffer.from('img'));
+    const res = await request(app).get('/api/products/photo?key=products/a.webp');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['content-security-policy']).toMatch(/sandbox/);
+  });
+
+  it.each(['info/info.json', 'products/products.json', 'logo/logoImage', 'products/../x.webp'])(
+    'refuses to read %p (not a product image) with 400',
+    async (key) => {
+      mockStorage.set(key, Buffer.from('{}'));
+      const res = await request(app).get(`/api/products/photo?key=${encodeURIComponent(key)}`);
+      expect(res.statusCode).toEqual(400);
+    },
+  );
 });
 
 describe('Public image URLs (R2_PUBLIC_URL)', () => {

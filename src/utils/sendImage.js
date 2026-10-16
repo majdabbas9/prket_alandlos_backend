@@ -14,6 +14,9 @@ const CACHE_CONTROL = 'public, max-age=300';
  */
 function sendImage(req, res, image, cacheControl = CACHE_CONTROL) {
   res.setHeader('Content-Type', image.contentType);
+  // Even if a stored object isn't really an image, browsers must not sniff or run it
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
   res.setHeader('Cache-Control', cacheControl);
   if (image.etag) res.setHeader('ETag', image.etag);
   if (image.lastModified) res.setHeader('Last-Modified', image.lastModified.toUTCString());

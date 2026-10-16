@@ -25,10 +25,13 @@ const storage = multer.diskStorage({
   },
 });
 
+// Raster images only: SVG can carry scripts, which would run if the file were ever served as-is
+const ALLOWED_EXTENSIONS = ['.jpeg', '.jpg', '.png', '.gif', '.webp', '.avif'];
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp|svg|avif/;
-  const extName = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimeType = allowedTypes.test(file.mimetype);
+  const extName = ALLOWED_EXTENSIONS.includes(path.extname(file.originalname).toLowerCase());
+  const mimeType = ALLOWED_MIME_TYPES.includes(file.mimetype);
 
   if (extName && mimeType) {
     logger.info(
@@ -42,7 +45,9 @@ const fileFilter = (req, file, cb) => {
     { originalname: file.originalname, mimetype: file.mimetype },
     'File upload rejected: invalid file type',
   );
-  cb(new Error('Only image files (jpg, jpeg, png, gif, webp, svg, avif) are allowed!'));
+  const err = new Error('Only image files (jpg, jpeg, png, gif, webp, avif) are allowed!');
+  err.status = 400;
+  cb(err);
 };
 
 const upload = multer({

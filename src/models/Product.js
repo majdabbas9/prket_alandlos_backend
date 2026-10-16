@@ -39,8 +39,9 @@ class Product {
   /**
    * Upload a product image to R2 under products/ as two WebP variants: a large one for
    * the detail view and a small thumbnail for product cards. Keys are unique per upload,
-   * so both are stored with an immutable Cache-Control. Files sharp can't decode are
-   * uploaded as-is and used for both variants.
+   * so both are stored with an immutable Cache-Control. Files sharp can't decode are rejected
+   * (error.status 400) rather than stored as-is, since raw bytes are served with the client's
+   * content type.
    * @param {string} localFilePath Path to the local file
    * @param {string} mimeType Content type of the image
    * @param {string} originalFilename Original file name to extract extension
@@ -56,16 +57,13 @@ class Product {
       try {
         variants = await Product.resizeImage(fs.readFileSync(localFilePath));
       } catch (err) {
-        logger.warn({ err, localFilePath }, 'Could not resize product image, uploading original');
-      }
-
-      if (!variants) {
-        const ext = path.extname(originalFilename) || '.jpeg';
-        const r2Key = `products/${baseName}${ext}`;
-        const fileBuffer = fs.readFileSync(localFilePath);
-        await R2.putObject(r2Key, fileBuffer, mimeType, BUCKET_NAME, IMMUTABLE_CACHE_CONTROL);
-        logger.info({ r2Key }, 'Product image uploaded to R2 successfully');
-        return { imageKey: r2Key, thumbKey: r2Key };
+        logger.warn(
+          { err, localFilePath, originalFilename, mimeType },
+          'Rejected undecodable image',
+        );
+        const invalid = new Error('The uploaded file is not a valid image');
+        invalid.status = 400;
+        throw invalid;
       }
 
       const imageKey = `products/${baseName}.webp`;

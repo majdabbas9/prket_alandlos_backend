@@ -158,7 +158,7 @@ exports.updateInfo = async (req, res) => {
     logger.error({ err: error }, 'Error updating store information');
     return res.status(500).json({
       success: false,
-      error: 'Failed to update store information: ' + error.message,
+      error: 'Failed to update store information',
     });
   }
 };
