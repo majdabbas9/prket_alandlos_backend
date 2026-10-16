@@ -159,6 +159,9 @@ async function servePhoto(request: Request, env: Env): Promise<Response | null> 
   headers.set('Cache-Control', IMMUTABLE_CACHE_CONTROL);
   headers.set('Access-Control-Allow-Origin', '*');
   if (!headers.has('Content-Type')) headers.set('Content-Type', 'image/jpeg');
+  // Even if a stored object isn't really an image, browsers must not sniff or run it
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
 
   // No body means the If-None-Match / If-Modified-Since precondition matched
   if (!('body' in object)) return new Response(null, { status: 304, headers });

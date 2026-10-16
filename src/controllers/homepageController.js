@@ -5,6 +5,14 @@ const logger = require('../utils/logger').getLogger(__filename);
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
+const removeTempUpload = (filePath) => {
+  try {
+    fs.unlinkSync(filePath);
+  } catch (err) {
+    if (err.code !== 'ENOENT') logger.error({ err, filePath }, 'Error removing temp upload file');
+  }
+};
+
 // Local variable to store current homepage model instance in memory
 let currentHomepage = new Homepage();
 
@@ -44,7 +52,7 @@ exports.getHomepageImage = async (req, res) => {
     logger.error({ err: error }, 'Error fetching/serving homepage image');
     return res.status(500).json({
       success: false,
-      error: 'Failed to retrieve or initialize homepage image: ' + error.message,
+      error: 'Failed to retrieve or initialize homepage image',
     });
   }
 };
@@ -66,17 +74,11 @@ exports.updateHomepageImage = async (req, res) => {
 
     const originalFilePath = req.file.path;
     logger.info({ originalFilePath }, 'Updating homepage image with uploaded file');
-    const updatedHomepage = await Homepage.updateImage(originalFilePath, currentHomepage.key);
-    currentHomepage = updatedHomepage;
-
-    // Clean up original uploaded temporary file
-    if (fs.existsSync(originalFilePath)) {
-      try {
-        fs.unlinkSync(originalFilePath);
-        logger.info({ originalFilePath }, 'Successfully cleaned up temporary upload file');
-      } catch (unlinkErr) {
-        logger.error({ err: unlinkErr, originalFilePath }, 'Error removing temp upload file');
-      }
+    try {
+      currentHomepage = await Homepage.updateImage(originalFilePath, currentHomepage.key);
+    } finally {
+      // Clean up the temp upload even when processing fails, so it never lingers in uploads/
+      removeTempUpload(originalFilePath);
     }
 
     logger.info({ data: currentHomepage.toJSON() }, 'Homepage image updated successfully');
@@ -89,7 +91,7 @@ exports.updateHomepageImage = async (req, res) => {
     logger.error({ err: error }, 'Error updating homepage image');
     return res.status(500).json({
       success: false,
-      error: 'Failed to process and update homepage image: ' + error.message,
+      error: 'Failed to process and update homepage image',
     });
   }
 };
