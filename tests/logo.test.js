@@ -44,17 +44,10 @@ jest.mock('../src/cloudManager/R2', () => {
   };
 });
 
-const logoDataPath = path.join(__dirname, '../src/data/logo.json');
-
 describe('Logo API Endpoints (/api/logo)', () => {
-  let backupData;
   let testImagePath;
 
   beforeAll(async () => {
-    if (fs.existsSync(logoDataPath)) {
-      backupData = fs.readFileSync(logoDataPath, 'utf8');
-    }
-
     testImagePath = path.join(__dirname, 'temp_test_logo.png');
     await sharp({
       create: {
@@ -81,13 +74,7 @@ describe('Logo API Endpoints (/api/logo)', () => {
   });
 
   afterAll(() => {
-    if (backupData) {
-      fs.writeFileSync(logoDataPath, backupData, 'utf8');
-    }
-
-    if (fs.existsSync(testImagePath)) {
-      fs.unlinkSync(testImagePath);
-    }
+    fs.rmSync(testImagePath, { force: true });
     mockStorage.clear();
   });
 

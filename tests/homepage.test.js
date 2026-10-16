@@ -49,18 +49,10 @@ jest.mock('../src/cloudManager/R2', () => {
   };
 });
 
-const homepageDataPath = path.join(__dirname, '../src/data/homepage.json');
-
 describe('Homepage Image API Endpoints', () => {
-  let backupData;
   let testImagePath;
 
   beforeAll(async () => {
-    // Backup existing homepage.json data
-    if (fs.existsSync(homepageDataPath)) {
-      backupData = fs.readFileSync(homepageDataPath, 'utf8');
-    }
-
     // Create a temporary test image file with width 2400px
     testImagePath = path.join(__dirname, 'temp_test_image.png');
     await sharp({
@@ -89,26 +81,11 @@ describe('Homepage Image API Endpoints', () => {
   });
 
   afterAll(() => {
-    // Restore backup
-    if (backupData) {
-      fs.writeFileSync(homepageDataPath, backupData, 'utf8');
-    }
-    // Clean up test image
-    if (fs.existsSync(testImagePath)) {
-      fs.unlinkSync(testImagePath);
-    }
+    fs.rmSync(testImagePath, { force: true });
     mockStorage.clear();
   });
 
   describe('GET /api/homepage-image', () => {
-    it('should return the actual image file binary by default', async () => {
-      const res = await request(app).get('/api/homepage-image');
-      expect([200, 302]).toContain(res.statusCode);
-      if (res.statusCode === 200) {
-        expect(res.headers['content-type']).toMatch(/image\/(jpeg|png|webp|avif|gif)/);
-      }
-    });
-
     it('should stream the image with caching headers', async () => {
       const res = await request(app).get('/api/homepage-image');
       expect(res.statusCode).toBe(200);

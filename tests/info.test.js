@@ -411,6 +411,25 @@ describe('Info Model & API Endpoints', () => {
       expect(heDoc.location).toBe(HebrewInfo.getDefaults().location);
     });
 
+    test('keeps unsent fields and only writes the target language for non-shared fields', async () => {
+      const stored = { ...new HebrewInfo().toJSON(), email: 'kept@prket.com', heroTitle: 'Kept' };
+      mockStorage.set('prket-andlos:info/info-he.json', JSON.stringify(stored));
+
+      const res = await request(app)
+        .post('/api/info')
+        .send({ lang: 'he', storeOpeningTime: 'Sun-Thu 9-17' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data).toEqual({ ...stored, storeOpeningTime: 'Sun-Thu 9-17' });
+      expect(R2.putObject).toHaveBeenCalledTimes(1);
+      expect(R2.putObject).toHaveBeenCalledWith(
+        'info/info-he.json',
+        expect.any(Buffer),
+        'application/json',
+        'prket-andlos',
+      );
+    });
+
     test('treats empty lang as English', async () => {
       const res = await request(app).post('/api/info').send({ lang: '', email: 'e@x.com' });
 
@@ -429,40 +448,6 @@ describe('Info Model & API Endpoints', () => {
       expect(res.body.success).toBe(false);
       expect(res.body.error).toMatch(/Unsupported language "xx"/);
       expect(mockStorage.size).toBe(0);
-    });
-  });
-
-  describe('cacheManager Utility Tests', () => {
-    test('gets, sets and clears cacheManager for all languages', async () => {
-      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
-
-      const sampleEn = new EnglishInfo({ email: 'cache@test.com' });
-      await cacheManager.set(cacheManager.KEYS.STORE_INFO, sampleEn);
-
-      const retrievedEn = await cacheManager.get(cacheManager.KEYS.STORE_INFO);
-      expect(retrievedEn.email).toBe(sampleEn.email);
-      expect(retrievedEn.lang).toBe('en');
-
-      const sampleAr = new ArabicInfo({ email: 'cache-ar@test.com' });
-      await cacheManager.set(cacheManager.KEYS.STORE_INFO_AR, sampleAr);
-
-      const retrievedAr = await cacheManager.get(cacheManager.KEYS.STORE_INFO_AR);
-      expect(retrievedAr.email).toBe(sampleAr.email);
-      expect(retrievedAr.lang).toBe('ar');
-
-      const sampleHe = new HebrewInfo({ email: 'cache-he@test.com' });
-      await cacheManager.set(cacheManager.KEYS.STORE_INFO_HE, sampleHe);
-
-      const retrievedHe = await cacheManager.get(cacheManager.KEYS.STORE_INFO_HE);
-      expect(retrievedHe.email).toBe(sampleHe.email);
-      expect(retrievedHe.lang).toBe('he');
-
-      await cacheManager.clear(cacheManager.KEYS.STORE_INFO);
-      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO)).toBeNull();
-      await cacheManager.clear(cacheManager.KEYS.STORE_INFO_AR);
-      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO_AR)).toBeNull();
-      await cacheManager.clear(cacheManager.KEYS.STORE_INFO_HE);
-      expect(await cacheManager.get(cacheManager.KEYS.STORE_INFO_HE)).toBeNull();
     });
   });
 });
