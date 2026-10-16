@@ -19,6 +19,7 @@
  *   TIMEOUT_MS    per-request timeout (default 10000)
  *   MAX_P95_MS    fail if any endpoint's p95 exceeds this (default 2000)
  *   MAX_ERROR_PCT fail if any endpoint's error rate exceeds this (default 1)
+ *   MAX_THUMB_KB  fail if the product thumbnail body is larger than this (default 150)
  */
 
 const BASE_URL = (
@@ -31,6 +32,8 @@ const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS, 10) || 10000;
 const MAX_P95_MS = parseInt(process.env.MAX_P95_MS, 10) || 2000;
 const MAX_ERROR_PCT =
   process.env.MAX_ERROR_PCT !== undefined ? Number(process.env.MAX_ERROR_PCT) : 1;
+// Product cards load thumbKey (600px WebP), so it must stay small
+const MAX_THUMB_KB = Number(process.env.MAX_THUMB_KB) || 150;
 
 const ENDPOINTS = [
   { name: 'products list', path: '/api/products' },
@@ -38,6 +41,7 @@ const ENDPOINTS = [
   { name: 'products search', path: '/api/products?search=parquet&sort=newest' },
   { name: 'product by id', path: '/api/products/:id' },
   { name: 'product photo', path: '/api/products/photo?key=:imageKey' },
+  { name: 'product thumbnail', path: '/api/products/photo?key=:thumbKey', maxKb: MAX_THUMB_KB },
   { name: 'info (en)', path: '/api/info?lang=en' },
   { name: 'info (ar)', path: '/api/info?lang=ar' },
   { name: 'info (he)', path: '/api/info?lang=he' },
@@ -68,7 +72,7 @@ function percentile(sorted, p) {
   return sorted[Math.max(0, idx)];
 }
 
-async function runEndpoint({ name, path, expectStatus }) {
+async function runEndpoint({ name, path, expectStatus, maxKb }) {
   const url = BASE_URL + path;
 
   for (let i = 0; i < WARMUP; i++) await timedRequest(url, expectStatus);
@@ -93,6 +97,7 @@ async function runEndpoint({ name, path, expectStatus }) {
   return {
     name,
     path,
+    maxKb,
     count: results.length,
     rps: results.length / (wallMs / 1000),
     min: latencies[0],
@@ -108,7 +113,7 @@ async function runEndpoint({ name, path, expectStatus }) {
   };
 }
 
-// Values for the :id / :imageKey path placeholders, taken from the live catalog
+// Values for the :id / :imageKey / :thumbKey path placeholders, taken from the live catalog
 async function resolvePlaceholders() {
   try {
     const res = await fetch(`${BASE_URL}/api/products`, {
@@ -117,7 +122,13 @@ async function resolvePlaceholders() {
     const data = await res.json();
     const list = Array.isArray(data) ? data : data.products || data.data || data.items || [];
     const withImage = list.find((p) => p.imageKey);
-    return { id: list[0] && list[0].id, imageKey: withImage && withImage.imageKey };
+    // A thumbnail that is a real variant, not the original reused (thumbKey === imageKey)
+    const withThumb = list.find((p) => p.thumbKey && p.thumbKey !== p.imageKey);
+    return {
+      id: list[0] && list[0].id,
+      imageKey: withImage && withImage.imageKey,
+      thumbKey: withThumb && withThumb.thumbKey,
+    };
   } catch {
     return {};
   }
@@ -138,6 +149,9 @@ const verdict = (failed) => (failed ? red('FAIL') : green('PASS'));
 function checkThresholds(s) {
   const reasons = [];
   if (s.p95 > MAX_P95_MS) reasons.push(`p95 ${ms(s.p95)} is over the ${ms(MAX_P95_MS)} limit`);
+  if (s.maxKb && s.avgKb > s.maxKb) {
+    reasons.push(`response is ${s.avgKb.toFixed(1)} KB, over the ${s.maxKb} KB limit`);
+  }
   if (s.errorPct > MAX_ERROR_PCT) {
     const byStatus = Object.entries(s.statusCounts)
       .map(([status, n]) => `${n}x ${status}`)
@@ -168,7 +182,10 @@ function printEndpointReport(s, reasons) {
     'Errors',
     `${s.errorCount} of ${s.count} ${dim(`(${s.errorPct.toFixed(1)}%, limit ${MAX_ERROR_PCT}%)`)}`,
   );
-  row('Response size', `${s.avgKb.toFixed(1)} KB ${dim('average body')}`);
+  row(
+    'Response size',
+    `${s.avgKb.toFixed(1)} KB ${dim(s.maxKb ? `(limit ${s.maxKb} KB)` : 'average body')}`,
+  );
   for (const r of reasons) console.log(`    ${red('x ' + r)}`);
 }
 
@@ -243,7 +260,7 @@ async function main() {
     ),
   );
 
-  const PLACEHOLDER = /:(id|imageKey)\b/g;
+  const PLACEHOLDER = /:(id|imageKey|thumbKey)\b/g;
   const needsLookup = selected.some((e) => e.path.match(PLACEHOLDER));
   const values = needsLookup ? await resolvePlaceholders() : {};
   const endpoints = selected.filter((e) => {
