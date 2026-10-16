@@ -11,6 +11,8 @@ const BUCKET_NAME = 'prket-andlos'; // Using the bucket name from user instructi
 const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const LARGE_WIDTH = 1600;
 const THUMB_WIDTH = 600;
+// Optional free-text catalog attributes shown on the product cards; omitted from JSON when empty
+const DETAIL_FIELDS = ['woodType', 'finish', 'thickness', 'plankSize', 'tag'];
 
 class Product {
   /**
@@ -24,6 +26,9 @@ class Product {
     this.description = data.description ? String(data.description).trim() : '';
     this.imageKey = data.imageKey ? String(data.imageKey).trim() : '';
     this.thumbKey = data.thumbKey ? String(data.thumbKey).trim() : '';
+    for (const field of DETAIL_FIELDS) {
+      this[field] = data[field] ? String(data[field]).trim() : '';
+    }
     this.dateOfUpload = data.dateOfUpload || new Date().toISOString();
 
     if (data.updatedAt) {
@@ -154,6 +159,7 @@ class Product {
       price: this.price,
       category: this.category,
       description: this.description,
+      ...Object.fromEntries(DETAIL_FIELDS.filter((f) => this[f]).map((f) => [f, this[f]])),
       imageKey: this.imageKey,
       ...(this.thumbKey && { thumbKey: this.thumbKey }),
       dateOfUpload: this.dateOfUpload,
@@ -163,5 +169,6 @@ class Product {
 }
 
 Product.IMMUTABLE_CACHE_CONTROL = IMMUTABLE_CACHE_CONTROL;
+Product.DETAIL_FIELDS = DETAIL_FIELDS;
 
 module.exports = Product;

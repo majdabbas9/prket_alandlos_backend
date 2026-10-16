@@ -6,6 +6,12 @@ const cacheManager = require('../utils/cacheManager');
 const sendImage = require('../utils/sendImage');
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'prket-andlos';
+
+// Picks the optional catalog attributes (woodType, finish, ...) present in a request body
+const pickDetails = (body = {}) =>
+  Object.fromEntries(
+    Product.DETAIL_FIELDS.filter((f) => body[f] !== undefined).map((f) => [f, body[f]]),
+  );
 const PRODUCTS_KEY = 'products/products.json';
 
 // Helper function to save products data to R2 and cache
@@ -241,6 +247,7 @@ exports.addProduct = async (req, res) => {
       price,
       category,
       description,
+      ...pickDetails(req.body),
       imageKey: imageKey.trim(),
       thumbKey,
     });
@@ -325,6 +332,7 @@ exports.updateProduct = async (req, res) => {
       price: price !== undefined ? price : existing.price,
       category: category !== undefined ? category : existing.category,
       description: description !== undefined ? description : existing.description,
+      ...pickDetails(req.body),
       imageKey: imageKey ? imageKey.trim() : existing.imageKey,
       thumbKey,
       updatedAt: new Date().toISOString(),

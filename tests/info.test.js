@@ -133,6 +133,13 @@ describe('Info Model & API Endpoints', () => {
       expect(json).not.toBeInstanceOf(Info);
     });
 
+    test('keeps the optional products page copy only once set', () => {
+      expect(new EnglishInfo().toJSON()).not.toHaveProperty('productsTitle');
+      const info = new EnglishInfo().update({ productsTitle: 'Our floors' });
+      expect(info.toJSON().productsTitle).toBe('Our floors');
+      expect(EnglishInfo.fromJSON(info.toJSON()).productsTitle).toBe('Our floors');
+    });
+
     test('parses from string or object via fromJSON', () => {
       const rawString = JSON.stringify({ email: 'str@example.com' });
       const fromStr = EnglishInfo.fromJSON(rawString);

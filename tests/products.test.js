@@ -149,6 +149,27 @@ describe('Prket Alandlos Backend API Tests', () => {
       expect(res.body.data.price).toBe(120.0);
     });
 
+    it('should store, update and clear the catalog attributes', async () => {
+      expect(createdProductId).toBeDefined();
+      const set = await request(app)
+        .put(`/api/products/${createdProductId}`)
+        .send({ woodType: 'Walnut', finish: 'Matt', thickness: '15 mm', tag: 'Premium' });
+      expect(set.statusCode).toEqual(200);
+      expect(set.body.data).toMatchObject({
+        woodType: 'Walnut',
+        finish: 'Matt',
+        thickness: '15 mm',
+        tag: 'Premium',
+      });
+
+      // Unsent attributes are kept; an empty one is removed
+      const cleared = await request(app)
+        .put(`/api/products/${createdProductId}`)
+        .send({ tag: '', plankSize: '190 × 1900 mm' });
+      expect(cleared.body.data).toMatchObject({ woodType: 'Walnut', plankSize: '190 × 1900 mm' });
+      expect(cleared.body.data).not.toHaveProperty('tag');
+    });
+
     it('should delete product by ID', async () => {
       expect(createdProductId).toBeDefined();
       const res = await request(app).delete(`/api/products/${createdProductId}`);

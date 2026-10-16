@@ -1,5 +1,8 @@
 const logger = require('../utils/logger').getLogger(__filename);
 
+// Products page header copy; optional, so the site falls back to its built-in text when unset
+const OPTIONAL_COPY_FIELDS = ['productsEyebrow', 'productsTitle', 'productsDescription'];
+
 /**
  * Class representing the Store Info structure.
  */
@@ -54,6 +57,9 @@ class Info {
     if (merged.heroEyebrow !== undefined) this.heroEyebrow = String(merged.heroEyebrow);
     if (merged.heroTitle !== undefined) this.heroTitle = String(merged.heroTitle);
     if (merged.heroDescription !== undefined) this.heroDescription = String(merged.heroDescription);
+    for (const field of OPTIONAL_COPY_FIELDS) {
+      if (merged[field] !== undefined) this[field] = String(merged[field]);
+    }
 
     this.stats = Array.isArray(merged.stats) ? merged.stats : defaults.stats;
   }
@@ -109,6 +115,9 @@ class Info {
     if (updateData.heroTitle !== undefined) this.heroTitle = String(updateData.heroTitle);
     if (updateData.heroDescription !== undefined)
       this.heroDescription = String(updateData.heroDescription);
+    for (const field of OPTIONAL_COPY_FIELDS) {
+      if (updateData[field] !== undefined) this[field] = String(updateData[field]);
+    }
     if (updateData.stats !== undefined) this.stats = updateData.stats;
 
     return this;
@@ -140,6 +149,9 @@ class Info {
     if (this.heroEyebrow !== undefined) obj.heroEyebrow = this.heroEyebrow;
     if (this.heroTitle !== undefined) obj.heroTitle = this.heroTitle;
     if (this.heroDescription !== undefined) obj.heroDescription = this.heroDescription;
+    for (const field of OPTIONAL_COPY_FIELDS) {
+      if (this[field] !== undefined) obj[field] = this[field];
+    }
 
     return obj;
   }
